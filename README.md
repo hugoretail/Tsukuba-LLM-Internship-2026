@@ -1,5 +1,14 @@
 # Tsukuba-LLM-Internship-2026
 
+## Reading Progress
+
+- [x] Preface
+- [ ] CHAPTER 1 - LLM Fundamentals with LangChain
+
+## Project 1 - French <-> Japanese LLM Translator
+
+TODO
+
 ## Slack link
 
 Discussion: https://app.slack.com/client/T03TFRDR1/C0AQCHNQ746
