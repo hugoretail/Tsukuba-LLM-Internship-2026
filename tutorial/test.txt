@@ -1,0 +1,57 @@
+Bonjour,
+Si vous deviez vous en souvenir, j’espère que vous vous souviendrez de cette lettre comme celle du 
+“Passionné” qui mélange Graffiti, IA, et écologie. C’est en étant étudiant au département Informatique de 
+l’IUT de Bordeaux que j’ai découvert votre formation. Avec elle, je serai le data scientist qui utilise les 
+données pour créer des liens, trouver des corrélations pour déduire les phénomènes environnementaux 
+et sociétaux du futur. La spécialisation chez vous en « Intelligence Artificielle » en 3ème année, 
+avec son cours sur le traitement des séquences et des séries temporelles (S9), est directement 
+alignée avec mes travaux de recherche personnels sur les données climatiques. 
+ 
+Dans l’objectif de devenir enseignant chercheur en IA appliquée à l’environnement (AI for sustainability), 
+j’ai retravaillé sur plusieurs domaines informatiques en dehors du BUT pour affiner mes compétences en 
+mathématiques et PyTorch. Afin d’avoir une meilleure compréhension de la structure des modèles créés 
+par  la  communauté  du  Natural  Language  Processing  (sur  HuggingFace),  j’étudie  régulièrement les 
+mathématiques appliquées à l’IA à travers ce livre interactif et open source sur le deep learning : Dive into 
+Deep Learning. Mon investissement est équivalent à environ 5h par semaine (1 chapitre par jour, les 
+notions vues sont accessibles sur mon GitHub). 
+ 
+Cette autonomie m’est grandement possible grâce à ma formation qui m’a enseigné une large culture de 
+l’informatique : autant en bases de données (SQL avancé), technologies web (JavaScript, frameworks), 
+algorithmique (structures complexes, tri et recherche, complexité), méthodes de gestion et déploiement, 
+et évidemment en Machine Learning (apprentissage supervisé/non supervisé, reinforcement learning, 
+algorithmes génétiques). L’ensemble de mes projets est disponible sur mon Portfolio. Son exploration 
+reflète bien ma personnalité imprégnée de la culture hip-hop. Il détaille mes projets informatiques, autant 
+ceux plus artistiques et ceux qui mélangent tout (application web de graffiti, Eco-Presents, fresques 
+participatives du festival Campulsations, danse, ...). 
+ 
+Je  souhaite  appliquer  ces  compétences  de  manière  cohérente  avec l’environnement en créant des 
+modèles  légers  et  sobres.  Mon  implication  dans  le  groupe  SobrIUT,  en  tant  qu’Ambassadeur  des 
+Transitions, m’a permis de découvrir les activités du groupe Numérique-et-Soutenabilité du LaBRI dont 
+les  travaux  m’inspirent  pour  une  collaboration  en  stage.  Je  réfléchis  actuellement  sur  quelques 
+problèmes  qui  me  tiennent  à  cœur  (feux  de  forêt,  prédictions  météo)  avec  lesquels  je  pourrais 
+développer un sujet de recherche. Mes réflexions actuelles gravitent autour des questions suivantes : 
+Est-ce  que  nos  données  météo  deviendront  obsolètes  avec  le  changement  climatique  ? Comment 
+adapter les modèles prédictifs à des conditions climatiques en rapide évolution ? 
+ 
+Concernant mon projet professionnel, j'envisage avant tout une carrière d'enseignant-chercheur. Mes 
+expériences  en  laboratoire  de  recherche  au  Japon  m’ont  fait  fortement  apprécier  cette  démarche 
+d'essais et erreurs. Le titre d'ingénieur CTI reconnu à l'international me permet de préparer un doctorat 
+pour  devenir  enseignant-chercheur,  mais  aussi  de  m'insérer  dans  l'industrie  ou  de  travailler  à 
+l'international  si  mon  projet  évolue  en  cours  de  route.  La  mobilité  internationale  obligatoire  de 17 
+semaines représente pour moi une opportunité concrète car Bordeaux INP entretient des partenariats 
+avec plusieurs universités japonaises (j’ai vu pour Tohoku University et l'Université de Chubu, où des 
+élèves de l'école ont déjà effectué leur projet de fin d'études). Ayant le niveau JLPT N2 en japonais et 
+deux stages de recherche en NLP à l'Université de Tsukuba derrière moi, je serais dans une position 
+unique pour tirer le maximum d'une telle mobilité. 
+ 
+Je  pense  ainsi  qu’en  rejoignant  votre  école,  j’aurais  l’opportunité  de  continuer  à  créer  :  souvenirs, 
+partages, et un meilleur environnement. 
+ 
+Merci pour votre temps.  
+ 
+Hugo Retail 
+Etudiant en 3ème année de BUT Informatique 
+hugo.retail@hotmail.com 
++33 7 66 82 05 26 
+Biganos, France 
+ 
