@@ -3,9 +3,15 @@
 ## Reading Progress
 
 - [x] Preface
-- [ ] CHAPTER 1 - LLM Fundamentals with LangChain
+- [x] CHAPTER 1 - LLM Fundamentals with LangChain
+- [x] CHAPTER 2 - RAG Part 1: Indexing your data
+- [ ] CHAPTER 3 - RAG Part 2: Chatting with your data
 
 ## Project 1 - French <-> Japanese LLM Translator
+
+TODO
+
+## Project 2 - ???
 
 TODO
 
