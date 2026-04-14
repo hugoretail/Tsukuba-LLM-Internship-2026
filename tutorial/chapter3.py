@@ -10,7 +10,7 @@ text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000,
 documents = text_splitter.split_documents(raw_documents)
 
 #embed each chunk and insert it into the vector store
-model = OllamaEmbeddings(model="qwen2.5:1.5b")
+model = OllamaEmbeddings(model="qwen2.5:7b")
 connection = 'postgresql+psycopg://langchain:langchain@localhost:6024/langchain'
 db = PGVector.from_documents(documents, model, connection=connection)
 
@@ -39,7 +39,7 @@ prompt = ChatPromptTemplate.from_template("""Answer the question
                                           Question: {question}
                                           """)
 
-llm = ChatOllama(model="qwen2.5:1.5b", temperature=0)
+llm = ChatOllama(model="qwen2.5:7b", temperature=0)
 chain = prompt | llm
 
 # fetch relevant docs with the public API
@@ -63,7 +63,7 @@ prompt = ChatPromptTemplate.from_template("""Answer the question based only on
 Question: {question}
 """)
 
-llm = ChatOllama(model="qwen2.5:1.5b", temperature=0)
+llm = ChatOllama(model="qwen2.5:7b", temperature=0)
 
 # @chain
 # def qa(input):
@@ -174,13 +174,13 @@ multi_query_qa.invoke("""Who are some key figures in the ancient greek history o
 prompt_rag_fusion = ChatPromptTemplate.from_template("""You are a helpful 
     assistant that generates multiple search queries based on a single input 
     query. \n
-    Generate multiple search queries related to: {question} \n
+    Generat e multiple search queries related to: {question} \n
     Output (4 queries):""")
 
 # def parse_queries_output(message):
 #   return message.content.split('\n')
 
-ollama_model = "qwen2.5:1.5b"
+ollama_model = "qwen2.5:1.7b"
 
 llm = ChatOllama(model=ollama_model, temperature=0)
 
@@ -305,13 +305,13 @@ question = """Why doesn't the following code work:
 
 from langchain_core.prompts import ChatPromptTemplate
 
-prompt = ChatPromptTemplate.from_messages(["human, "speak in {language}])
+prompt = ChatPromptTemplate.from_messages(["human, "speak in {language}"])
 prompt.invoke("french")
 """
 
 result = router.invoke({"question": question})
 
-print(result["datasource"] if isinstance(result, dict) else result.datasource) #type: ignore
+# print(result["datasource"] if isinstance(result, dict) else result.datasource) #type: ignore
 #"python_docs"
 
 def choose_route(result):
@@ -325,3 +325,93 @@ def choose_route(result):
 full_chain = router | RunnableLambda(choose_route)
 
 #resume at: Semantic Routing
+import numpy as np
+from sklearn.metrics.pairwise import cosine_similarity
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import PromptTemplate
+from langchain_core.runnables import chain
+from langchain_ollama import ChatOllama, OllamaEmbeddings
+
+# Two prompts
+physics_template = """You are a very smart physics professor. You are great at 
+    answering questions about physics in a concise and easy-to-understand manner. 
+    When you don't know the answer to a question, you admit that you don't know.
+Here is a question:
+{query}"""
+math_template = """You are a very good mathematician. You are great at answering 
+    math questions. You are so good because you are able to break down hard 
+    problems into their component parts, answer the component parts, and then 
+    put them together to answer the broader question.
+Here is a question:
+{query}"""
+
+#embed prompts
+embeddings = OllamaEmbeddings(model=ollama_model)
+prompt_templates = [physics_template, math_template]
+prompt_embeddings = embeddings.embed_documents(prompt_templates)
+
+#route question to prompt
+@chain
+def prompt_router(query):
+  #embed question
+  query_embedding = embeddings.embed_query(query)
+  #compute similarity
+  similarity = cosine_similarity(np.array([query_embedding]), np.array(prompt_embeddings))[0]
+  #pick the prompt most similar to the input question
+  most_similar = prompt_templates[similarity.argmax()]
+  return PromptTemplate.from_template(most_similar)
+
+semantic_router = (
+  prompt_router
+  | ChatOllama(model=ollama_model)
+  | StrOutputParser()
+)
+
+# print(semantic_router.invoke("What's a black hole"))
+
+from langchain_classic.chains.query_constructor.schema import AttributeInfo
+from langchain_classic.retrievers.self_query.base import SelfQueryRetriever
+
+fields = [
+    AttributeInfo(
+        name="genre",
+        description="The genre of the movie",
+        type="string or list[string]",
+    ),
+    AttributeInfo(
+        name="year",
+        description="The year the movie was released",
+        type="integer",
+    ),
+    AttributeInfo(
+        name="director",
+        description="The name of the movie director",
+        type="string",
+    ),
+    AttributeInfo(
+        name="rating", description="A 1-10 rating for the movie", type="float"
+    ),
+]
+description = "Brief summary of a movie"
+llm = ChatOllama(model=ollama_model,temperature=0)
+retriever = SelfQueryRetriever.from_llm(
+    llm, db, description, fields,
+)
+# print(retriever.invoke(
+#     "What's a highly rated (above 8.5) science fiction film?"))
+
+from langchain_community.tools import QuerySQLDatabaseTool
+from langchain_community.utilities import SQLDatabase
+from langchain.chains import create_sql_query_chain
+
+# replace this with the connection details of your db
+db = SQLDatabase.from_uri("sqlite:///Chinook.db")
+llm = ChatOllama(model=ollama_model, temperature=0)
+# convert question to sql query
+write_query = create_sql_query_chain(llm, db)
+# Execute SQL query
+execute_query = QuerySQLDatabaseTool(db=db)
+# combined
+chain = write_query | execute_query
+# invoke the chain
+chain.invoke('How many employees are there?')
