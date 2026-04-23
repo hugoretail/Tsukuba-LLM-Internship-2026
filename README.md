@@ -5,9 +5,37 @@
 - [x] Preface
 - [x] CHAPTER 1 - LLM Fundamentals with LangChain
 - [x] CHAPTER 2 - RAG Part 1: Indexing your data
-- [ ] CHAPTER 3 - RAG Part 2: Chatting with your data
+- [x] CHAPTER 3 - RAG Part 2: Chatting with your data
+- [x] CHAPTER 4 - Using LangGraph to Add Memory to Your Chatbot
+- [x] CHAPTER 5 - Cognitive Architectures with LangGraph
 
-## Project 1 - French <-> Japanese LLM Translator
+## Project 1 - FR <-> JA Learning Assistant (LLM + Ollama + LangChain)
+
+### Goal
+
+Build a French <-> Japanese learning assistant powered by a local/open-source LLM stack (Ollama), with LangChain/LangGraph orchestration.
+
+### MVP Scope (Phase 1)
+
+- Translation FR <-> JA specialized for learner use-cases
+- Guided output modes:
+	- Natural translation
+	- Literal translation
+	- Short explanation of lexical/grammar choices
+- Basic grammar hints (particles, politeness level, tense/aspect markers)
+- Local-first inference with Ollama
+
+### Backlog (Phase 2)
+
+- Exercise generation (fill-in-the-blank, rephrase, translate-back)
+  > TODO: ADD MORE EXERCISES (fun and tryharding ones)
+- Correction and feedback with explanation
+- Vocabulary extraction + review lists
+  > TODO: REVIEW THIS AND MAYBE ADD A FLASHCARD SYSTEM (like Anki App, though it may be out of context for this app)
+- Conversation role-play scenarios (daily life, lab, admin)
+- Learner memory (common mistakes + spaced repetition support)
+
+### Evaluation
 
 TODO
 
