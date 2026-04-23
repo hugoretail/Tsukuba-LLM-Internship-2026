@@ -25,6 +25,10 @@ Build a French <-> Japanese learning assistant powered by a local/open-source LL
 - Basic grammar hints (particles, politeness level, tense/aspect markers)
 - Local-first inference with Ollama
 
+### Notes
+
+lzlzl
+
 ### Backlog (Phase 2)
 
 - Exercise generation (fill-in-the-blank, rephrase, translate-back)
