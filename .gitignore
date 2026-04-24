@@ -17,6 +17,8 @@ downloads/
 eggs/
 .eggs/
 lib/
+!jisho-ultime/src/lib/
+!jisho-ultime/src/lib/**
 lib64/
 parts/
 sdist/
@@ -207,3 +209,6 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# VSCode
+.vscode/

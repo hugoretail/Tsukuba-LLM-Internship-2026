@@ -1,12 +1,28 @@
+import { ollamaChat } from "@/lib/llm/ollama";
 import { NextRequest, NextResponse } from "next/server";
+
+export const runtime = "nodejs";
 
 type Direction = "fr-ja" | "ja-fr";
 
 export async function POST(req: NextRequest) {
+  const startedAt = Date.now();
+  let body: unknown;
+
   try {
-    const body = await req.json();
-    const text = typeof body?.text === "string" ? body.text.trim() : "";
-    const direction = body?.direction as Direction;
+    body = await req.json();
+  } catch {
+    return NextResponse.json(
+      { error: "invalid JSON body" },
+      { status: 400 }
+    );
+  }
+
+  try {
+    const text = typeof (body as { text?: unknown })?.text === "string"
+      ? (body as { text: string }).text.trim()
+      : "";
+    const direction = (body as { direction?: unknown })?.direction as Direction;
 
     if (!text) {
       return NextResponse.json(
@@ -22,34 +38,59 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const mockResponse = {
-      input: { text, direction },
-      output: {
-        natural:
-          direction === "fr-ja"
-            ? "これは自然な翻訳のモックです。"
-            : "Ceci est une traduction naturelle mockee.",
-        literal:
-          direction === "fr-ja"
-            ? "これは直訳のモックです。"
-            : "Ceci est une traduction litterale mockee.",
-        explanation:
-          "Mock: explication courte des choix lexicaux et grammaticaux.",
-        hints: [
-          "Mock hint 1",
-          "Mock hint 2",
-        ],
+    const instruction =
+      direction === "fr-ja"
+        ? "Translate from French to Japanese."
+        : "Translate from Japanese to French.";
+    
+    const prompt =
+      instruction +
+      " Keep the answer concise." +
+      " Return only the translated sentence, no explanation." +
+      "\n\nInput:\n" +
+      text;
+
+    const aiMessage = await ollamaChat.invoke(prompt);
+    const translatedText =
+      typeof aiMessage.content === "string"
+        ? aiMessage.content.trim()
+        : String(aiMessage.content);
+
+    return NextResponse.json(
+      {
+        input: { text, direction },
+        output: {
+          natural: translatedText,
+          literal: "TODO step 2",
+          explanation: "TODO step 2",
+          hints: [],
+        },
+        meta: {
+          model: process.env.OLLAMA_MODEL ?? "qwen2.5:7b",
+          latencyMs: Date.now() - startedAt,
+        },
       },
-      meta: {
-        model: "mock-model",
-        latencyMs: 42,
+      { status: 200 }
+    );
+
+  } catch (error) {
+    const maybeCause =
+      typeof error === "object" &&
+      error !== null &&
+      "cause" in error &&
+      typeof (error as { cause?: unknown }).cause === "object" &&
+      (error as { cause?: unknown }).cause !== null &&
+      "message" in ((error as { cause?: unknown }).cause as Record<string, unknown>)
+        ? String((((error as { cause?: unknown }).cause as Record<string, unknown>).message))
+        : undefined;
+
+    return NextResponse.json(
+      {
+        error: "upstream LLM failure",
+        details: error instanceof Error ? error.message : "Unknown error",
+        cause: maybeCause,
       },
-    };
-    return NextResponse.json(mockResponse, { status: 200 });
-  } catch {
-    return  NextResponse.json(
-      { error: "invalid JSON body" },
-      { status: 400 }
+      { status: 502 }
     );
   }
 }

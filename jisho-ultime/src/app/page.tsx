@@ -31,20 +31,29 @@ export default function Home() {
   const [text, setText] = useState("Bonjour, comment vas-tu ?");
   const [direction, setDirection] = useState<Direction>("fr-ja");
   const [result, setResult] = useState<TranslateResponse | null>(null);
-  const [history, setHistory] = useState<HistoryItem[]>(() => {
+  const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
     if (typeof window === "undefined") {
-      return [];
+      return;
     }
 
     try {
       const storedHistory = window.localStorage.getItem(HISTORY_STORAGE_KEY);
-      return storedHistory ? (JSON.parse(storedHistory) as HistoryItem[]) : [];
+      if (!storedHistory) {
+        return;
+      }
+
+      // Delay state sync to avoid hydration mismatch between SSR and client localStorage state.
+      setTimeout(() => {
+        setHistory(JSON.parse(storedHistory) as HistoryItem[]);
+      }, 0);
     } catch {
-      return [];
+      // Ignore invalid localStorage payloads.
     }
-  });
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") {
