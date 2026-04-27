@@ -1,9 +1,12 @@
-import { ollamaChat } from "@/lib/llm/ollama";
+import { ollamaChat, ollamaModelName } from "@/lib/llm/ollama";
+import { buildTranslationMessages } from "@/lib/translate/prompt";
+import {
+  translateLlmOutputSchema,
+  translateRequestSchema,
+} from "@/lib/translate/schema";
 import { NextRequest, NextResponse } from "next/server";
 
 export const runtime = "nodejs";
-
-type Direction = "fr-ja" | "ja-fr";
 
 export async function POST(req: NextRequest) {
   const startedAt = Date.now();
@@ -19,54 +22,55 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const text = typeof (body as { text?: unknown })?.text === "string"
-      ? (body as { text: string }).text.trim()
-      : "";
-    const direction = (body as { direction?: unknown })?.direction as Direction;
-
-    if (!text) {
+    const parsedRequest = translateRequestSchema.safeParse(body);
+    if (!parsedRequest.success) {
       return NextResponse.json(
-        { error: "text is required" },
+        {
+          error: "invalid request payload",
+          details: parsedRequest.error.flatten(),
+        },
         { status: 400 }
       );
     }
 
-    if (direction !== "fr-ja" && direction !== "ja-fr") {
-      return NextResponse.json(
-        { error: "direction must be fr-ja or ja-fr" },
-        { status: 400 }
-      );
-    }
-
-    const instruction =
-      direction === "fr-ja"
-        ? "Translate from French to Japanese."
-        : "Translate from Japanese to French.";
-    
-    const prompt =
-      instruction +
-      " Keep the answer concise." +
-      " Return only the translated sentence, no explanation." +
-      "\n\nInput:\n" +
-      text;
-
-    const aiMessage = await ollamaChat.invoke(prompt);
-    const translatedText =
+    const { text, direction } = parsedRequest.data;
+    const messages = buildTranslationMessages({ text, direction });
+    const aiMessage = await ollamaChat.invoke(messages);
+    const rawContent =
       typeof aiMessage.content === "string"
         ? aiMessage.content.trim()
-        : String(aiMessage.content);
+        : JSON.stringify(aiMessage.content);
+
+    const parsedJson = parseModelJson(rawContent);
+    if (!parsedJson) {
+      return NextResponse.json(
+        {
+          error: "invalid model output",
+          details: "Could not parse JSON object from model response",
+          raw: rawContent.slice(0, 500),
+        },
+        { status: 502 }
+      );
+    }
+
+    const parsedOutput = translateLlmOutputSchema.safeParse(parsedJson);
+    if (!parsedOutput.success) {
+      return NextResponse.json(
+        {
+          error: "schema validation failed",
+          details: parsedOutput.error.flatten(),
+          raw: rawContent.slice(0, 500),
+        },
+        { status: 502 }
+      );
+    }
 
     return NextResponse.json(
       {
         input: { text, direction },
-        output: {
-          natural: translatedText,
-          literal: "TODO step 2",
-          explanation: "TODO step 2",
-          hints: [],
-        },
+        output: parsedOutput.data,
         meta: {
-          model: process.env.OLLAMA_MODEL ?? "qwen2.5:7b",
+          model: ollamaModelName,
           latencyMs: Date.now() - startedAt,
         },
       },
@@ -93,4 +97,39 @@ export async function POST(req: NextRequest) {
       { status: 502 }
     );
   }
+}
+
+function parseModelJson(rawText: string): unknown | null {
+  const trimmed = rawText.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(stripCodeFence(trimmed));
+  } catch {
+    const firstBrace = trimmed.indexOf("{");
+    const lastBrace = trimmed.lastIndexOf("}");
+    if (firstBrace < 0 || lastBrace <= firstBrace) {
+      return null;
+    }
+
+    const candidate = trimmed.slice(firstBrace, lastBrace + 1);
+    try {
+      return JSON.parse(candidate);
+    } catch {
+      return null;
+    }
+  }
+}
+
+function stripCodeFence(rawText: string): string {
+  if (!rawText.startsWith("```")) {
+    return rawText;
+  }
+
+  return rawText
+    .replace(/^```[a-zA-Z]*\s*/u, "")
+    .replace(/\s*```$/u, "")
+    .trim();
 }
