@@ -34,6 +34,8 @@ export default function Home() {
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showDetails, setShowDetails] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -93,6 +95,7 @@ export default function Home() {
 
       const translation = data as TranslateResponse;
       setResult(translation);
+      setShowDetails(false);
 
       setHistory((currentHistory) => [
         {
@@ -116,131 +119,173 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-50">
-      <main className="mx-auto flex min-h-screen w-full max-w-6xl flex-col gap-8 px-6 py-10 lg:px-10">
-        <section className="space-y-3">
-          <p className="text-sm uppercase tracking-[0.3em] text-emerald-300">
-            Jisho Ultime
-          </p>
-          <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
-            FR <span className="text-emerald-300">&lt;-&gt;</span> JA Learning Assistant
-          </h1>
-          <p className="max-w-2xl text-sm leading-6 text-zinc-300 sm:text-base">
-            Test de la route mock /api/translate avec une interface minimale en React / Next.js.
-          </p>
-        </section>
-
-        <section className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-          <div className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-2xl shadow-black/20 backdrop-blur">
-            <div className="space-y-4">
-              <label className="block text-sm font-medium text-zinc-200">
-                Texte source
-                <textarea
-                  value={text}
-                  onChange={(event) => setText(event.target.value)}
-                  className="mt-2 min-h-40 w-full rounded-2xl border border-white/10 bg-zinc-900/90 p-4 text-sm leading-6 text-zinc-100 outline-none transition placeholder:text-zinc-500 focus:border-emerald-400"
-                  placeholder="Saisis une phrase en français ou en japonais..."
-                />
-              </label>
-
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-                <label className="block text-sm font-medium text-zinc-200">
-                  Direction
-                  <select
-                    value={direction}
-                    onChange={(event) => setDirection(event.target.value as Direction)}
-                    className="mt-2 w-full rounded-2xl border border-white/10 bg-zinc-900/90 px-4 py-3 text-sm text-zinc-100 outline-none transition focus:border-emerald-400 sm:w-56"
-                  >
-                    <option value="fr-ja">FR vers JA</option>
-                    <option value="ja-fr">JA vers FR</option>
-                  </select>
-                </label>
-
-                <button
-                  type="button"
-                  onClick={handleTranslate}
-                  disabled={loading}
-                  className="inline-flex items-center justify-center rounded-2xl bg-emerald-400 px-5 py-3 text-sm font-semibold text-zinc-950 transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:bg-zinc-700 disabled:text-zinc-300"
-                >
-                  {loading ? "Traduction..." : "Traduire"}
-                </button>
-              </div>
-
-              {error ? (
-                <div className="rounded-2xl border border-red-400/30 bg-red-400/10 px-4 py-3 text-sm text-red-200">
-                  {error}
-                </div>
-              ) : null}
-            </div>
+    <div className="min-h-screen bg-[#f5f2eb] text-[#1f2937]">
+      <main className="mx-auto flex min-h-screen w-full max-w-3xl flex-col gap-4 px-4 py-6 sm:px-6 sm:py-8">
+        <header className="flex items-center justify-between">
+          <h1 className="text-lg tracking-[0.2em]">JISHO</h1>
+          <div className="group relative text-xs text-[#6b7280]">
+            ?
+            <span className="pointer-events-none absolute -right-1 top-6 w-48 rounded-md border border-[#d4cec2] bg-[#fffdf9] px-2 py-1 text-[11px] leading-5 opacity-0 shadow-sm transition group-hover:opacity-100">
+              Translate FR/JA. Click details only if needed.
+            </span>
           </div>
+        </header>
 
-          <div className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-2xl shadow-black/20 backdrop-blur">
-            <div className="space-y-4">
-              <div>
-                <p className="text-xs uppercase tracking-[0.3em] text-zinc-400">Sorties</p>
-                <h2 className="mt-1 text-xl font-semibold text-zinc-50">Réponse mockée</h2>
-              </div>
+        <section className="rounded-2xl border border-[#ddd6c7] bg-[#fffdf9] p-3 sm:p-4">
+          <textarea
+            value={text}
+            onChange={(event) => setText(event.target.value)}
+            className="min-h-40 w-full resize-y rounded-xl border border-[#e5dfd2] bg-white px-4 py-3 text-base leading-7 outline-none transition focus:border-[#9ca3af]"
+            placeholder="Type..."
+          />
 
-              <OutputCard title="Traduction naturelle" value={result?.output.natural ?? "En attente..."} />
-              <OutputCard title="Traduction littérale" value={result?.output.literal ?? "En attente..."} />
-              <OutputCard title="Explication courte" value={result?.output.explanation ?? "En attente..."} />
-              <OutputCard
-                title="Grammar hints"
-                value={result?.output.hints?.length ? result.output.hints.join("\n") : "En attente..."}
+          <div className="mt-3 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-1 rounded-full border border-[#ddd6c7] bg-white p-1">
+              <SwitchButton
+                active={direction === "fr-ja"}
+                onClick={() => setDirection("fr-ja")}
+                label="FR -> JA"
+                title="French vers Japanese"
               />
-
-              {result ? (
-                <p className="text-xs text-zinc-400">
-                  Modèle: {result.meta.model} • latence: {result.meta.latencyMs} ms
-                </p>
-              ) : null}
+              <SwitchButton
+                active={direction === "ja-fr"}
+                onClick={() => setDirection("ja-fr")}
+                label="JA -> FR"
+                title="Japanese vers French"
+              />
             </div>
+
+            <button
+              type="button"
+              onClick={handleTranslate}
+              disabled={loading}
+              className="rounded-full border border-[#d1d5db] bg-[#1f2937] px-4 py-2 text-sm text-white transition hover:bg-[#111827] disabled:cursor-not-allowed disabled:bg-[#9ca3af]"
+            >
+              {loading ? "..." : "Go"}
+            </button>
           </div>
+
+          {error ? (
+            <p className="mt-2 text-xs text-[#b91c1c]">{error}</p>
+          ) : null}
         </section>
 
-        <section className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-2xl shadow-black/20 backdrop-blur">
-          <div className="mb-4 flex items-center justify-between gap-4">
-            <div>
-              <p className="text-xs uppercase tracking-[0.3em] text-zinc-400">Historique</p>
-              <h2 className="mt-1 text-xl font-semibold text-zinc-50">Dernières requêtes</h2>
-            </div>
-            <p className="text-sm text-zinc-400">{history.length} élément(s)</p>
+        <section className="rounded-2xl border border-[#ddd6c7] bg-[#fffdf9] p-3 sm:p-4">
+          <p className="whitespace-pre-line text-lg leading-8 text-[#111827]">
+            {result?.output.natural ?? "..."}
+          </p>
+
+          <div className="mt-3 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowDetails((current) => !current)}
+              className="text-xs text-[#6b7280] underline-offset-2 hover:underline"
+            >
+              {showDetails ? "hide details" : "show details"}
+            </button>
+            {result ? (
+              <span className="text-xs text-[#9ca3af]">{result.meta.latencyMs}ms</span>
+            ) : null}
           </div>
 
+          {showDetails ? (
+            <div className="mt-3 grid gap-3 rounded-xl border border-[#ebe6db] bg-[#faf8f3] p-3 text-sm">
+              <DetailRow label="literal" value={result?.output.literal ?? "..."} />
+              <DetailRow label="explanation" value={result?.output.explanation ?? "..."} />
+              <DetailRow
+                label="hints"
+                value={result?.output.hints?.length ? result.output.hints.join("\n") : "..."}
+              />
+            </div>
+          ) : null}
+        </section>
+      </main>
+
+      <div className="pointer-events-none fixed bottom-4 right-4 z-20 sm:bottom-6 sm:right-6">
+        <button
+          type="button"
+          onClick={() => setShowHistory((current) => !current)}
+          className="pointer-events-auto rounded-full border border-[#d1d5db] bg-[#fffdf9] px-3 py-2 text-xs text-[#374151] shadow-sm"
+          title="Toggle history"
+        >
+          history ({history.length})
+        </button>
+      </div>
+
+      <aside
+        className={`fixed inset-x-0 bottom-0 z-10 border-t border-[#d9d2c3] bg-[#fffdf9] shadow-[0_-8px_24px_rgba(17,24,39,0.08)] transition-transform duration-300 ${
+          showHistory ? "translate-y-0" : "translate-y-[calc(100%-2.6rem)]"
+        }`}
+      >
+        <div className="mx-auto flex max-w-3xl items-center justify-between px-4 py-2 sm:px-6">
+          <button
+            type="button"
+            onClick={() => setShowHistory((current) => !current)}
+            className="text-xs text-[#6b7280]"
+          >
+            {showHistory ? "close" : "open"}
+          </button>
+          <span className="text-xs text-[#9ca3af]">history</span>
+        </div>
+
+        <div className="mx-auto max-h-56 w-full max-w-3xl overflow-y-auto px-4 pb-4 sm:px-6">
           {history.length === 0 ? (
-            <p className="text-sm text-zinc-400">Aucune requête pour le moment.</p>
+            <p className="text-xs text-[#9ca3af]">...</p>
           ) : (
-            <div className="grid gap-3">
+            <div className="space-y-2">
               {history.map((item) => (
                 <article
                   key={`${item.timestamp}-${item.text}`}
-                  className="rounded-2xl border border-white/10 bg-zinc-900/70 p-4"
+                  className="rounded-xl border border-[#ebe6db] bg-white px-3 py-2"
                 >
-                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                    <p className="text-sm font-medium text-zinc-100">
-                      {item.direction === "fr-ja" ? "FR -> JA" : "JA -> FR"}
-                    </p>
-                    <p className="text-xs text-zinc-500">
-                      {new Date(item.timestamp).toLocaleString("fr-FR")}
-                    </p>
+                  <div className="mb-1 flex items-center justify-between text-[11px] text-[#9ca3af]">
+                    <span>{item.direction === "fr-ja" ? "FR -> JA" : "JA -> FR"}</span>
+                    <span>{new Date(item.timestamp).toLocaleTimeString("fr-FR")}</span>
                   </div>
-                  <p className="mt-2 text-sm text-zinc-300">{item.text}</p>
-                  <p className="mt-3 text-sm text-emerald-300">{item.output.natural}</p>
+                  <p className="line-clamp-1 text-xs text-[#6b7280]">{item.text}</p>
+                  <p className="line-clamp-1 text-sm text-[#111827]">{item.output.natural}</p>
                 </article>
               ))}
             </div>
           )}
-        </section>
-      </main>
+        </div>
+      </aside>
     </div>
   );
 }
 
-function OutputCard({ title, value }: { title: string; value: string }) {
+function SwitchButton({
+  active,
+  onClick,
+  label,
+  title,
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+  title: string;
+}) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-zinc-900/70 p-4">
-      <p className="text-xs uppercase tracking-[0.25em] text-zinc-500">{title}</p>
-      <p className="mt-2 whitespace-pre-line text-sm leading-6 text-zinc-100">{value}</p>
+    <button
+      type="button"
+      onClick={onClick}
+      title={title}
+      className={`rounded-full px-3 py-1.5 text-xs transition ${
+        active
+          ? "bg-[#1f2937] text-white"
+          : "text-[#6b7280] hover:bg-[#f3f4f6]"
+      }`}
+    >
+      {label}
+    </button>
+  );
+}
+
+function DetailRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="mb-1 text-[11px] text-[#9ca3af]">{label}</p>
+      <p className="whitespace-pre-line text-sm leading-6 text-[#374151]">{value}</p>
     </div>
   );
 }

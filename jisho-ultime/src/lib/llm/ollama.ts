@@ -9,4 +9,3 @@ export const ollamaChat = new ChatOllama({
   model,
   temperature: 0.2,
 });
-
