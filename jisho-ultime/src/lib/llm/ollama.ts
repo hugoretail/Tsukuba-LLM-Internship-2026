@@ -10,4 +10,5 @@ export const ollamaChat = new ChatOllama({
   baseUrl,
   model,
   temperature: 0.2,
+  format: "json",
 });
