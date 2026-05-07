@@ -34,31 +34,31 @@ export async function POST(req: NextRequest) {
     }
 
     const { text, direction } = parsedRequest.data;
-    const messages = buildTranslationMessages({ text, direction });
+    const sourceLines = text
+      .split(/\r?\n/u)
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0);
+
+    const normalizedText = sourceLines.join("\n");
+    const lineCount = sourceLines.length || 1;
+
+    const messages = buildTranslationMessages({
+      text: normalizedText,
+      direction,
+      lineCount,
+    });
     const aiMessage = await ollamaChat.invoke(messages);
     const rawContent =
       typeof aiMessage.content === "string"
         ? aiMessage.content.trim()
         : JSON.stringify(aiMessage.content);
 
-    const parsedJson = parseModelJson(rawContent);
-    if (!parsedJson) {
+    const parsedOutput = await parseModelOutputWithRepair(rawContent);
+    if (!parsedOutput) {
       return NextResponse.json(
         {
           error: "invalid model output",
-          details: "Could not parse JSON object from model response",
-          raw: rawContent.slice(0, 500),
-        },
-        { status: 502 }
-      );
-    }
-
-    const parsedOutput = translateLlmOutputSchema.safeParse(parsedJson);
-    if (!parsedOutput.success) {
-      return NextResponse.json(
-        {
-          error: "schema validation failed",
-          details: parsedOutput.error.flatten(),
+          details: "Could not parse/validate model JSON output",
           raw: rawContent.slice(0, 500),
         },
         { status: 502 }
@@ -68,7 +68,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         input: { text, direction },
-        output: parsedOutput.data,
+        output: parsedOutput,
         meta: {
           model: ollamaModelName,
           latencyMs: Date.now() - startedAt,
@@ -96,6 +96,56 @@ export async function POST(req: NextRequest) {
       },
       { status: 502 }
     );
+  }
+}
+
+async function parseModelOutputWithRepair(rawContent: string) {
+  const parsedJson = parseModelJson(rawContent);
+  if (parsedJson) {
+    const parsedOutput = translateLlmOutputSchema.safeParse(parsedJson);
+    if (parsedOutput.success) {
+      return parsedOutput.data;
+    }
+  }
+
+  const repairedRaw = await requestJsonRepair(rawContent);
+  if (!repairedRaw) {
+    return null;
+  }
+
+  const repairedJson = parseModelJson(repairedRaw);
+  if (!repairedJson) {
+    return null;
+  }
+
+  const repairedOutput = translateLlmOutputSchema.safeParse(repairedJson);
+  if (!repairedOutput.success) {
+    return null;
+  }
+
+  return repairedOutput.data;
+}
+
+async function requestJsonRepair(rawContent: string): Promise<string | null> {
+  const repairPrompt = [
+    "Rewrite the following output into STRICT valid JSON.",
+    "Return ONLY JSON with exactly these keys:",
+    '{"natural":"string","literal":"string","explanation":"string","hints":["string","string"]}',
+    "Rules:",
+    "- Keep meaning unchanged.",
+    "- hints must contain between 2 and 4 strings.",
+    "- No markdown, no code fences, no extra keys.",
+    "Raw output:",
+    rawContent,
+  ].join("\n");
+
+  try {
+    const repairedMessage = await ollamaChat.invoke(repairPrompt);
+    return typeof repairedMessage.content === "string"
+      ? repairedMessage.content.trim()
+      : JSON.stringify(repairedMessage.content);
+  } catch {
+    return null;
   }
 }
 
