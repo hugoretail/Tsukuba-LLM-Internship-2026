@@ -54,11 +54,11 @@ export function buildTranslationMessages(input: {
     `- explanation: short explanation in ${explanationLanguage}.`,
     `- hints: 2 to 4 short bullet-like hints in ${explanationLanguage}.`,
     "- annotations: one array per natural line, each array contains ordered tokens or segments for that line.",
-    "  Each token must include display, surface, gloss, and equivalents.",
+    "  Each token must include display, surface, gloss, equivalents (synonyms), and optionally antonyms.",
     "  display is the exact token text from the NATURAL TRANSLATION line (target language), including spacing when needed to reconstruct that translated line.",
     "  surface is the lexical unit being explained (in the source language).",
     `  gloss is a direct, literal translation into ${config.target === "Japanese" ? "Japanese" : "French"}.`,
-    `  equivalents: list 2-4 alternative ${config.target === "Japanese" ? "Japanese" : "French"} translations or synonyms for the word, NOT in any other language.`,
+    `  equivalents: list 2-4 alternative ${config.target === "Japanese" ? "Japanese" : "French"} translations or synonyms for the word, NOT in any other language. If possible, also provide 0-2 antonyms (label as antonyms) when they are learner-useful.`,
 
     "  If you cannot confidently annotate a token, use an empty array for that line rather than omitting the key.",
     `- grammar: short list of grammar points used in the sentence, each tied to a line index and optional token span. Write grammar explanations in ${explanationLanguage}.`,

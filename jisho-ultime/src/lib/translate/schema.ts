@@ -10,6 +10,7 @@ const annotationTokenSchema = z.object({
   equivalents: z.array(z.string().trim().min(1)).min(1).max(4),
   lemma: z.string().trim().min(1).optional(),
   pos: z.string().trim().min(1).optional(),
+  antonyms: z.array(z.string().trim().min(1)).optional(),
   notes: z.string().trim().min(1).optional(),
   start: z.number().int().nonnegative().optional(),
   end: z.number().int().nonnegative().optional(),

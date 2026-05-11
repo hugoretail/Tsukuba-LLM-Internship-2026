@@ -10,6 +10,7 @@ type AnnotationToken = {
   surface: string;
   gloss: string;
   equivalents: string[];
+  antonyms?: string[];
   lemma?: string;
   pos?: string;
   notes?: string;
@@ -117,7 +118,10 @@ function buildTokenHoverCard(
       : null,
     token.lemma ? `${t(uiLang, "lemma")}: ${token.lemma}` : null,
     token.pos ? `${t(uiLang, "pos")}: ${token.pos}` : null,
-    token.notes ? `${t(uiLang, "notes")}: ${token.notes}` : null,
+     token.notes ? `${t(uiLang, "notes")}: ${token.notes}` : null,
+     token.antonyms && token.antonyms.length > 0
+       ? `${t(uiLang, "antonyms")}: ${token.antonyms.join(", ")}`
+       : null,
     relatedGrammar.length > 0
       ? `${t(uiLang, "linkedGrammar")}: ${relatedGrammar.map((point) => point.name).join(", ")}`
       : null,
@@ -139,10 +143,6 @@ function buildGrammarHoverCard(
 ): HoverCard {
   const lines = [
     `${t(uiLang, "grammarExplanation")}: ${point.explanation}`,
-    `${t(uiLang, "grammarLine")}: ${point.line + 1}`,
-    point.token_span
-      ? `${t(uiLang, "grammarRange")}: ${point.token_span[0] + 1}-${point.token_span[1]}`
-      : null,
     point.example ? `${t(uiLang, "grammarExample")}: ${point.example}` : null,
   ].filter((line): line is string => line !== null);
 
@@ -157,7 +157,7 @@ function buildGrammarHoverCard(
 export default function Home() {
   const [text, setText] = useState("Bonjour, comment vas-tu ?");
   const [direction, setDirection] = useState<Direction>("fr-ja");
-  const [uiLang, setUiLang] = useState<UILang>("fr");
+  const [uiLang, setUiLang] = useState<UILang>("ja");
   const [result, setResult] = useState<TranslateResponse | null>(null);
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -170,6 +170,21 @@ export default function Home() {
     if (typeof window === "undefined") {
       return;
     }
+
+    // Set UI language based on browser locale. Fallback to Japanese.
+    // Put setState in a microtask to avoid cascading renders warning.
+    setTimeout(() => {
+      try {
+        const nav = navigator.language || (navigator.languages && navigator.languages[0]) || "";
+        if (nav && nav.toLowerCase().startsWith("fr")) {
+          setUiLang("fr");
+        } else {
+          setUiLang("ja");
+        }
+      } catch {
+        // ignore
+      }
+    }, 0);
 
     try {
       const storedHistory = window.localStorage.getItem(HISTORY_STORAGE_KEY);
@@ -263,6 +278,22 @@ export default function Home() {
     }
   }
 
+  function handleToggleDirection() {
+    const newDirection: Direction = direction === "fr-ja" ? "ja-fr" : "fr-ja";
+    // Update default text based on new direction
+    if (newDirection === "fr-ja") {
+      setText("Bonjour, comment vas-tu ?");
+    } else {
+      setText("こんにちは、元気ですか?");
+    }
+    // Reset UI state
+    setResult(null);
+    setError(null);
+    setHoverCard(null);
+    setShowDetails(false);
+    setDirection(newDirection);
+  }
+
   const naturalLines = result?.output.natural.split(/\r?\n/u) ?? [];
 
   return (
@@ -313,19 +344,21 @@ export default function Home() {
           />
 
           <div className="mt-3 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-1 rounded-full border border-[#ddd6c7] bg-white p-1">
-              <SwitchButton
-                active={direction === "fr-ja"}
-                onClick={() => setDirection("fr-ja")}
-                label={t(uiLang, "dirFrJa")}
-                title={t(uiLang, "dirFrJa")}
-              />
-              <SwitchButton
-                active={direction === "ja-fr"}
-                onClick={() => setDirection("ja-fr")}
-                label={t(uiLang, "dirJaFr")}
-                title={t(uiLang, "dirJaFr")}
-              />
+            <div className="flex items-center gap-0 rounded-full border border-[#ddd6c7] bg-white p-1">
+              <span className="px-3 py-1.5 text-xs font-medium text-[#374151]">
+                FR
+              </span>
+              <button
+                type="button"
+                onClick={handleToggleDirection}
+                className="border-l border-r border-[#ddd6c7] px-2 py-1.5 text-base text-[#6b7280] transition hover:text-[#374151]"
+                title={direction === "fr-ja" ? t(uiLang, "dirFrJa") : t(uiLang, "dirJaFr")}
+              >
+                {direction === "fr-ja" ? "→" : "←"}
+              </button>
+              <span className="px-3 py-1.5 text-xs font-medium text-[#374151]">
+                JA
+              </span>
             </div>
 
             <button
@@ -454,7 +487,7 @@ export default function Home() {
           {showDetails ? (
             <div className="mt-3 grid gap-3 rounded-xl border border-[#ebe6db] bg-[#faf8f3] p-3 text-sm">
               <DetailRow label={t(uiLang, "literal")} value={result?.output.literal ?? "..."} />
-              <DetailRow label={t(uiLang, "explanation")} value={result?.output.explanation ?? "..."} />
+              {/* explanation removed per TODO */}
               <DetailRow
                 label={t(uiLang, "hints")}
                 value={result?.output.hints?.length ? result.output.hints.join("\n") : "..."}
@@ -533,33 +566,6 @@ export default function Home() {
         </div>
       </aside>
     </div>
-  );
-}
-
-function SwitchButton({
-  active,
-  onClick,
-  label,
-  title,
-}: {
-  active: boolean;
-  onClick: () => void;
-  label: string;
-  title: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      title={title}
-      className={`rounded-full px-3 py-1.5 text-xs transition ${
-        active
-          ? "bg-[#1f2937] text-white"
-          : "text-[#6b7280] hover:bg-[#f3f4f6]"
-      }`}
-    >
-      {label}
-    </button>
   );
 }
 
