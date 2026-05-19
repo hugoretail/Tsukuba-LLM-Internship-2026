@@ -33,11 +33,11 @@ export const translateRequestSchema = z.object({
   text: z.string().trim().min(1, "text is required"),
   direction: directionSchema,
   uiLang: uiLangSchema.default("fr"),
+  usePivotEnglish: z.boolean().optional(),
 });
 
 export const translateLlmOutputSchema = z.object({
-  natural: z.string().trim().min(1),
-  literal: z.string().trim().min(1),
+  translation: z.string().trim().min(1),
   explanation: z.string().trim().min(1),
   hints: z.array(z.string().trim().min(1)).default([]),
   annotations: z.array(z.array(annotationTokenSchema)).default([]),

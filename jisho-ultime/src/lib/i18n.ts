@@ -33,6 +33,7 @@ export const i18n: Record<UILang, Record<string, string>> = {
     errorTranslate: "Impossible de contacter l'API de traduction.",
     errorUnknown: "Erreur inconnue",
     ms: "ms",
+    usePivotEnglish: "Utiliser pivot anglais (peut améliorer les petits modèles)",
   },
   ja: {
     appTitle: "辞書",
@@ -66,6 +67,7 @@ export const i18n: Record<UILang, Record<string, string>> = {
     errorTranslate: "翻訳APIに接続できません。",
     errorUnknown: "不明なエラー",
     ms: "ms",
+    usePivotEnglish: "英語ピボットを使用（小型モデルで改善する場合あり）",
   },
 };
 

@@ -29,8 +29,7 @@ type GrammarPoint = {
 type TranslateResponse = {
   input: { text: string; direction: Direction };
   output: {
-    natural: string;
-    literal: string;
+    translation: string;
     explanation: string;
     hints: string[];
     annotations: AnnotationToken[][];
@@ -165,6 +164,7 @@ export default function Home() {
   const [showDetails, setShowDetails] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [hoverCard, setHoverCard] = useState<HoverCard | null>(null);
+  const [usePivotEnglish, setUsePivotEnglish] = useState(false);
 
   useEffect(() => {
     if (typeof window === "undefined") {
@@ -227,7 +227,7 @@ export default function Home() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ text: trimmedText, direction, uiLang }),
+        body: JSON.stringify({ text: trimmedText, direction, uiLang, usePivotEnglish }),
       });
 
       const rawBody = await response.text();
@@ -294,7 +294,7 @@ export default function Home() {
     setDirection(newDirection);
   }
 
-  const naturalLines = result?.output.natural.split(/\r?\n/u) ?? [];
+  const translatedLines = result?.output.translation.split(/\r?\n/u) ?? [];
 
   return (
     <div className="min-h-screen bg-[#f5f2eb] text-[#1f2937]">
@@ -343,7 +343,7 @@ export default function Home() {
             placeholder={t(uiLang, "placeholder")}
           />
 
-          <div className="mt-3 flex items-center justify-between gap-3">
+          <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex items-center gap-0 rounded-full border border-[#ddd6c7] bg-white p-1">
               <span className="px-3 py-1.5 text-xs font-medium text-[#374151]">
                 FR
@@ -361,14 +361,25 @@ export default function Home() {
               </span>
             </div>
 
-            <button
-              type="button"
-              onClick={handleTranslate}
-              disabled={loading}
-              className="rounded-full border border-[#d1d5db] bg-[#1f2937] px-4 py-2 text-sm text-white transition hover:bg-[#111827] disabled:cursor-not-allowed disabled:bg-[#9ca3af]"
-            >
-              {loading ? t(uiLang, "loading") : t(uiLang, "translateBtn")}
-            </button>
+            <div className="flex items-center gap-3">
+              <label className="flex items-center gap-2 text-xs text-[#6b7280]">
+                <input
+                  type="checkbox"
+                  checked={usePivotEnglish}
+                  onChange={(e) => setUsePivotEnglish(e.target.checked)}
+                />
+                <span>{t(uiLang, "usePivotEnglish")}</span>
+              </label>
+
+              <button
+                type="button"
+                onClick={handleTranslate}
+                disabled={loading}
+                className="rounded-full border border-[#d1d5db] bg-[#1f2937] px-4 py-2 text-sm text-white transition hover:bg-[#111827] disabled:cursor-not-allowed disabled:bg-[#9ca3af]"
+              >
+                {loading ? t(uiLang, "loading") : t(uiLang, "translateBtn")}
+              </button>
+            </div>
           </div>
 
           {error ? (
@@ -379,7 +390,7 @@ export default function Home() {
         <section className="rounded-2xl border border-[#ddd6c7] bg-[#fffdf9] p-3 sm:p-4">
           <div className="space-y-2">
             {result ? (
-              naturalLines.map((line, lineIndex) => {
+              translatedLines.map((line, lineIndex) => {
                 const annotationLine = result.output.annotations?.[lineIndex] ?? [];
                 const useAnnotationLine = canRenderAnnotationLine(
                   annotationLine,
@@ -486,8 +497,6 @@ export default function Home() {
 
           {showDetails ? (
             <div className="mt-3 grid gap-3 rounded-xl border border-[#ebe6db] bg-[#faf8f3] p-3 text-sm">
-              <DetailRow label={t(uiLang, "literal")} value={result?.output.literal ?? "..."} />
-              {/* explanation removed per TODO */}
               <DetailRow
                 label={t(uiLang, "hints")}
                 value={result?.output.hints?.length ? result.output.hints.join("\n") : "..."}
@@ -558,7 +567,7 @@ export default function Home() {
                     <span>{new Date(item.timestamp).toLocaleTimeString(uiLang === "fr" ? "fr-FR" : "ja-JP")}</span>
                   </div>
                   <p className="line-clamp-1 text-xs text-[#6b7280]">{item.text}</p>
-                  <p className="line-clamp-1 text-sm text-[#111827]">{item.output.natural}</p>
+                  <p className="line-clamp-1 text-sm text-[#111827]">{item.output.translation}</p>
                 </article>
               ))}
             </div>

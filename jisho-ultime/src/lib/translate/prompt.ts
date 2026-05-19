@@ -22,53 +22,58 @@ function getExplanationLanguage(uiLang: UILang) {
 
 export function buildTranslationMessages(input: {
   text: string;
-  direction: Direction;
+  direction?: Direction;
+  source?: string; // e.g. 'English', 'French', 'Japanese' - overrides direction if provided
+  target?: string; // e.g. 'French' or 'Japanese' - used when source/target override is provided
   lineCount: number;
   uiLang: UILang;
 }) {
-  const config = getDirectionConfig(input.direction);
+  const config = input.direction ? getDirectionConfig(input.direction) : undefined;
+  const sourceName = input.source ?? config?.source ?? "French";
+  const targetName = input.target ?? config?.target ?? "Japanese";
   const explanationLanguage = getExplanationLanguage(input.uiLang);
   const isMultiLine = input.lineCount > 1;
+  const uiLanguageName = input.uiLang === "fr" ? "French" : "Japanese";
 
   const systemPrompt = [
     "You are a bilingual translation assistant for French and Japanese learners.",
-    `Translate strictly from ${config.source} to ${config.target}.`,
+    `Translate strictly from ${sourceName} to ${targetName}.`,
     isMultiLine
       ? `The source contains ${input.lineCount} distinct lines. Translate each line independently, keep order, and do not merge lines.`
       : "The source contains one line. Translate it as one line.",
     "Return ONLY a valid JSON object (no markdown, no commentary, no code fences).",
-    `Interface POV: ${input.uiLang === "fr" ? "French" : "Japanese"}.`,
-    `The following fields must be written entirely in ${explanationLanguage}: explanation, hints, grammar[].explanation, grammar[].example, annotations[].[].notes, annotations[].[].equivalents.`,
-    `Do NOT mix languages inside those fields.`,
-    "The JSON object MUST contain exactly these keys:",
-    '{"natural":"string","literal":"string","explanation":"string","hints":["string","string"],"annotations":[[{"display":"string","surface":"string","gloss":"string","equivalents":["string"],"lemma":"string?","pos":"string?","notes":"string?","start":0,"end":1}]],"grammar":[{"name":"string","explanation":"string","line":0,"token_span":[0,1],"example":"string?"}]}',
+    `Interface POV language: ${uiLanguageName}.`,
+    "Use this exact top-level shape: translation, explanation, hints, annotations, grammar.",
     "Constraints:",
     isMultiLine
-      ? "- natural: fluent translation, one output line per input line (same line count), separated by newline characters."
-      : "- natural: fluent translation in target language.",
-    isMultiLine
-      ? "- literal: close, word-by-word style translation, one output line per input line (same line count), separated by newline characters."
-      : "- literal: close, word-by-word style translation in target language.",
-    "- natural and literal must be true translations into the TARGET language, not copies/transliterations of the source.",
-    "- Do not echo the source sentence unless a token is untranslatable (proper noun, number, URL, symbol).",
+      ? "- translation: fluent translation, one output line per input line (same line count), separated by newline characters."
+      : "- translation: fluent translation in target language.",
+    "- translation must be a true translation into the TARGET language.",
+    "- Do not echo/copy the full source sentence.",
     `- explanation: short explanation in ${explanationLanguage}.`,
     `- hints: 2 to 4 short bullet-like hints in ${explanationLanguage}.`,
-    "- annotations: one array per natural line, each array contains ordered tokens or segments for that line.",
-    "  Each token must include display, surface, gloss, equivalents (synonyms), and optionally antonyms.",
-    "  display is the exact token text from the NATURAL TRANSLATION line (target language), including spacing when needed to reconstruct that translated line.",
-    "  surface is the lexical unit being explained (in the source language).",
-    `  gloss is a direct, literal translation into ${config.target === "Japanese" ? "Japanese" : "French"}.`,
-    `  equivalents: list 2-4 alternative ${config.target === "Japanese" ? "Japanese" : "French"} translations or synonyms for the word, NOT in any other language. If possible, also provide 0-2 antonyms (label as antonyms) when they are learner-useful.`,
-
-    "  If you cannot confidently annotate a token, use an empty array for that line rather than omitting the key.",
-    `- grammar: short list of grammar points used in the sentence, each tied to a line index and optional token span. Write grammar explanations in ${explanationLanguage}.`,
-    "  Focus on useful learner-facing points: particles, verb forms, politeness, tense/aspect, word order, contractions, and fixed expressions.",
-    "  If no grammar point is relevant, return an empty array.",
+    "- annotations: one array per translation line, ordered tokens/segments for that line.",
+    "- token fields: display, surface, gloss, equivalents are required; lemma/pos/notes/antonyms/start/end are optional.",
+    "- display: exact token text from the translation line.",
+    "- surface: source-language lexical unit.",
+    `- gloss: direct translation in ${targetName}.`,
+    `- equivalents: 2-4 alternatives in ${uiLanguageName} (UI language), never in another language.`,
+    "- antonyms: optional, up to 2 learner-useful items.",
+    `- annotations[].notes must be in ${explanationLanguage}.`,
+    "- if uncertain for a line, return an empty array for that line.",
+    `- grammar: short learner-facing list (1 to 3 points when possible), each point with line and optional token_span; explanations/examples in ${explanationLanguage}.`,
+    "- only return an empty grammar array if there is truly nothing notable.",
   ].join("\n");
 
+  const directionLine = input.direction
+    ? `Direction: ${input.direction}`
+    : `Direction: ${sourceName} -> ${targetName}`;
+
   const userPrompt = [
-    `Direction: ${input.direction}`,
+    directionLine,
     `Input lines: ${input.lineCount}`,
+    `Source language: ${sourceName}`,
+    `Target language: ${targetName}`,
     "Source text:",
     input.text,
   ].join("\n\n");
