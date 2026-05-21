@@ -12,3 +12,11 @@ export const ollamaChat = new ChatOllama({
   temperature: 0.2,
   format: "json",
 });
+
+// For translation-only prompts where we explicitly want plain text.
+// Avoids forcing JSON mode and is more deterministic.
+export const ollamaChatText = new ChatOllama({
+  baseUrl,
+  model,
+  temperature: 0,
+});

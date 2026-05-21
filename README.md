@@ -27,7 +27,14 @@ Build a French <-> Japanese learning assistant powered by a local/open-source LL
 
 ### Notes
 
-lzlzl
+NONE
+
+### Issues
+
+- Insuffisances du modèle : prompt pas assez développé
+- Hallucinations : prompts trop détaillés
+- Tâches difficiles : traductions FR<->JA alors que le modèle n'a pas été entrainé sur beaucoup de texte comme ça
+- Contexte trop gros : plusieurs tâches en un seul prompt. Séparer les tâches en plusieurs prompts (traduction puis explication)
 
 ### Backlog (Phase 2)
 
@@ -57,3 +64,4 @@ Schedule: https://app.slack.com/client/T03TFRDR1
 Book in PDF: [Learning LangChain Building AI and LLM Applications with LangChain and LangGraph (Mayo Oshin, Nuno Campos)](https://ytx-readings.github.io/AI/books/LLM/LangChain/Learning%20LangChain%20Building%20AI%20and%20LLM%20Applications%20with%20LangChain%20and%20LangGraph%20(Mayo%20Oshin,%20Nuno%20Campos)%20(Z-Library).pdf)
 
 Google Books: https://books.google.co.jp/books?id=_3VGEQAAQBAJ&pg=PR5&hl=ja&source=gbs_selected_pages&cad=1#v=onepage&q&f=false
+

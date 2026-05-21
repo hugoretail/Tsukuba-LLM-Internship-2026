@@ -1,5 +1,8 @@
-import { ollamaChat, ollamaModelName } from "@/lib/llm/ollama";
-import { buildTranslationMessages } from "@/lib/translate/prompt";
+import { ollamaChat, ollamaChatText, ollamaModelName } from "@/lib/llm/ollama";
+import {
+  buildTranslationAnalysisMessages,
+  buildTranslationMessages,
+} from "@/lib/translate/prompt";
 import {
   translateLlmOutputSchema,
   translateRequestSchema,
@@ -52,6 +55,8 @@ const grammarOnlySchema = z.object({
 
 type TranslateOutput = ReturnType<typeof translateLlmOutputSchema.parse>;
 
+type ChatInput = Parameters<typeof ollamaChat.invoke>[0];
+
 type RewriteTarget = {
   text: string;
   apply: (draft: TranslateOutput, translated: string) => void;
@@ -89,43 +94,76 @@ export async function POST(req: NextRequest) {
 
     let pivotEnglish: string | null = null;
 
-    let translationResult;
+    // Two-pass strategy (preferred for small models):
+    // 1) translation-only (plain text)
+    // 2) analysis (explanation/hints/optional annotations + grammar) using the provided translation
+    const targetName = getTargetName(direction);
 
     if (usePivotEnglish) {
-      // Pivot flow: Source -> English -> Target
-      const english = await translateToEnglish(normalizedText, direction);
-      pivotEnglish = english;
-      // If we couldn't get an English pivot, fall back to direct single-step messages
-      if (!english) {
-        const fallbackMessages = buildTranslationMessages({
-          text: normalizedText,
-          direction,
-          lineCount,
-          uiLang,
-        });
-        translationResult = await invokeTranslationModel(fallbackMessages, uiLang);
-      } else {
-        // Build second-step messages: English -> original target
-        const targetName = direction === "fr-ja" ? "Japanese" : "French";
-        const englishLineCount = english.split("\n").length || 1;
-        const secondMessages = buildTranslationMessages({
-          text: english,
-          source: "English",
-          target: targetName,
-          lineCount: englishLineCount,
-          uiLang,
-        });
+      pivotEnglish = await translateToEnglish(normalizedText, direction);
+    }
 
-        translationResult = await invokeTranslationModel(secondMessages, uiLang);
-      }
-    } else {
-      const messages = buildTranslationMessages({
-        text: normalizedText,
+    let plainTranslation: string | null = null;
+    if (usePivotEnglish && pivotEnglish) {
+      plainTranslation = await translatePlain({
+        sourceText: pivotEnglish,
+        sourceName: "English",
+        targetName,
+        expectedLineCount: lineCount,
+      });
+    }
+
+    if (!plainTranslation) {
+      plainTranslation = await translateToTargetPlain(normalizedText, direction);
+    }
+
+    if (plainTranslation) {
+      plainTranslation = sanitizeTranslationText(plainTranslation);
+    }
+
+    let translationResult:
+      | { ok: true; output: TranslateOutput }
+      | { ok: false; debug: ModelDebugInfo };
+
+    if (plainTranslation && !isWrongTargetLanguage(plainTranslation, direction)) {
+      const analysisMessages = buildTranslationAnalysisMessages({
+        sourceText: normalizedText,
+        translation: plainTranslation,
         direction,
         lineCount,
         uiLang,
       });
-      translationResult = await invokeTranslationModel(messages, uiLang);
+
+      const analysis = await invokeTranslationModel(analysisMessages, uiLang);
+      if (analysis.ok) {
+        const normalized = normalizeOutputForLineCount(
+          {
+            ...analysis.output,
+            translation: plainTranslation,
+          },
+          lineCount
+        );
+
+        translationResult = { ok: true, output: normalized };
+      } else {
+        translationResult = await runSinglePassTranslation({
+          normalizedText,
+          direction,
+          uiLang,
+          lineCount,
+          usePivotEnglish: Boolean(usePivotEnglish),
+          pivotEnglish,
+        });
+      }
+    } else {
+      translationResult = await runSinglePassTranslation({
+        normalizedText,
+        direction,
+        uiLang,
+        lineCount,
+        usePivotEnglish: Boolean(usePivotEnglish),
+        pivotEnglish,
+      });
     }
 
     if (!translationResult.ok) {
@@ -138,59 +176,6 @@ export async function POST(req: NextRequest) {
         },
         { status: 502 }
       );
-    }
-
-    // Never allow raw JSON strings like {"text":"..."} to surface in the UI.
-    translationResult = {
-      ok: true,
-      output: {
-        ...translationResult.output,
-        translation: sanitizeTranslationText(translationResult.output.translation),
-      },
-    };
-
-    // Guardrail: small models sometimes output the translation in the UI language.
-    // If the translation isn't actually in the TARGET language, retry once with stricter instruction.
-    if (isWrongTargetLanguage(translationResult.output.translation, direction)) {
-      const retryMessages = buildRetryMessages({
-        sourceText: normalizedText,
-        direction,
-        uiLang,
-        lineCount,
-        usePivotEnglish: Boolean(usePivotEnglish),
-        pivotEnglish,
-      });
-      const retry = await invokeTranslationModel(retryMessages, uiLang);
-      if (retry.ok && !isWrongTargetLanguage(retry.output.translation, direction)) {
-        translationResult = retry;
-      } else {
-        // Last resort: ensure at least the translation field is in the target language.
-        let corrected = await translateToTargetPlain(normalizedText, direction);
-
-        // If pivot is available, use it for an even stronger last-resort fallback.
-        // This helps stubborn JA->FR cases where the model keeps copying Japanese.
-        if ((!corrected || isWrongTargetLanguage(corrected, direction)) && usePivotEnglish && pivotEnglish) {
-          corrected = await translatePlain({
-            sourceText: pivotEnglish,
-            sourceName: "English",
-            targetName: getTargetName(direction),
-            expectedLineCount: lineCount,
-          });
-        }
-
-        if (corrected && !isWrongTargetLanguage(corrected, direction)) {
-          translationResult = {
-            ok: true,
-            output: {
-              ...translationResult.output,
-              translation: corrected,
-              // Avoid showing misleading hover tokens/grammar for an out-of-sync translation.
-              annotations: [],
-              grammar: [],
-            },
-          };
-        }
-      }
     }
 
     // If the model returned no grammar points, try generating 1-3 learner-facing points.
@@ -246,7 +231,7 @@ export async function POST(req: NextRequest) {
   }
 }
 
-async function invokeTranslationModel(messages: ReturnType<typeof buildTranslationMessages>, uiLang: UILang): Promise<
+async function invokeTranslationModel(messages: ChatInput, uiLang: UILang): Promise<
   | { ok: true; output: ReturnType<typeof translateLlmOutputSchema.parse> }
   | { ok: false; debug: ModelDebugInfo }
 > {
@@ -281,6 +266,133 @@ async function invokeTranslationModel(messages: ReturnType<typeof buildTranslati
 
     return { ok: true, output: parsedOutput.output };
   }
+}
+
+async function runSinglePassTranslation(input: {
+  normalizedText: string;
+  direction: "fr-ja" | "ja-fr";
+  uiLang: UILang;
+  lineCount: number;
+  usePivotEnglish: boolean;
+  pivotEnglish: string | null;
+}): Promise<
+  | { ok: true; output: TranslateOutput }
+  | { ok: false; debug: ModelDebugInfo }
+> {
+  let translationResult:
+    | { ok: true; output: TranslateOutput }
+    | { ok: false; debug: ModelDebugInfo };
+
+  if (input.usePivotEnglish) {
+    // Pivot flow: Source -> English -> Target
+    const english = input.pivotEnglish ?? (await translateToEnglish(input.normalizedText, input.direction));
+    if (!english) {
+      const fallbackMessages = buildTranslationMessages({
+        text: input.normalizedText,
+        direction: input.direction,
+        lineCount: input.lineCount,
+        uiLang: input.uiLang,
+      });
+      translationResult = await invokeTranslationModel(fallbackMessages, input.uiLang);
+    } else {
+      const targetName = getTargetName(input.direction);
+      const englishLineCount = english.split("\n").length || 1;
+      const secondMessages = buildTranslationMessages({
+        text: english,
+        source: "English",
+        target: targetName,
+        lineCount: englishLineCount,
+        uiLang: input.uiLang,
+      });
+
+      translationResult = await invokeTranslationModel(secondMessages, input.uiLang);
+    }
+  } else {
+    const messages = buildTranslationMessages({
+      text: input.normalizedText,
+      direction: input.direction,
+      lineCount: input.lineCount,
+      uiLang: input.uiLang,
+    });
+    translationResult = await invokeTranslationModel(messages, input.uiLang);
+  }
+
+  if (!translationResult.ok) {
+    return translationResult;
+  }
+
+  // Never allow raw JSON strings like {"text":"..."} to surface in the UI.
+  translationResult = {
+    ok: true,
+    output: {
+      ...translationResult.output,
+      translation: sanitizeTranslationText(translationResult.output.translation),
+    },
+  };
+
+  // Guardrail: small models sometimes output the translation in the UI language.
+  // If the translation isn't actually in the TARGET language, retry once with stricter instruction.
+  if (isWrongTargetLanguage(translationResult.output.translation, input.direction)) {
+    const retryMessages = buildRetryMessages({
+      sourceText: input.normalizedText,
+      direction: input.direction,
+      uiLang: input.uiLang,
+      lineCount: input.lineCount,
+      usePivotEnglish: input.usePivotEnglish,
+      pivotEnglish: input.pivotEnglish,
+    });
+    const retry = await invokeTranslationModel(retryMessages, input.uiLang);
+    if (retry.ok && !isWrongTargetLanguage(retry.output.translation, input.direction)) {
+      translationResult = retry;
+    } else {
+      // Last resort: ensure at least the translation field is in the target language.
+      let corrected = await translateToTargetPlain(input.normalizedText, input.direction);
+
+      // If pivot is available, use it for an even stronger last-resort fallback.
+      // This helps stubborn JA->FR cases where the model keeps copying Japanese.
+      if ((!corrected || isWrongTargetLanguage(corrected, input.direction)) && input.usePivotEnglish && input.pivotEnglish) {
+        corrected = await translatePlain({
+          sourceText: input.pivotEnglish,
+          sourceName: "English",
+          targetName: getTargetName(input.direction),
+          expectedLineCount: input.lineCount,
+        });
+      }
+
+      if (corrected && !isWrongTargetLanguage(corrected, input.direction)) {
+        translationResult = {
+          ok: true,
+          output: {
+            ...translationResult.output,
+            translation: corrected,
+            // Avoid showing misleading hover tokens/grammar for an out-of-sync translation.
+            annotations: [],
+            grammar: [],
+          },
+        };
+      }
+    }
+  }
+
+  return translationResult;
+}
+
+function normalizeOutputForLineCount(output: TranslateOutput, lineCount: number): TranslateOutput {
+  // Keep conservative: if line-linked fields are inconsistent, drop them.
+  const draft: TranslateOutput = structuredClone(output);
+
+  if (lineCount > 1) {
+    if (draft.annotations.length > 0 && draft.annotations.length !== lineCount) {
+      draft.annotations = [];
+    }
+  }
+
+  if (draft.grammar.length > 0) {
+    draft.grammar = draft.grammar.filter((point) => point.line >= 0 && point.line < lineCount);
+  }
+
+  const validated = translateLlmOutputSchema.safeParse(draft);
+  return validated.success ? validated.data : output;
 }
 
 async function parseModelOutputWithRepair(rawContent: string, uiLang: UILang): Promise<
@@ -1113,7 +1225,7 @@ async function translatePlain(input: {
   ].join("\n\n");
 
   try {
-    const response = await ollamaChat.invoke(prompt as unknown as string);
+    const response = await ollamaChatText.invoke(prompt);
     const raw = typeof response.content === "string" ? response.content.trim() : JSON.stringify(response.content);
     return sanitizeTranslationText(stripCodeFence(raw));
   } catch {

@@ -80,3 +80,58 @@ export function buildTranslationMessages(input: {
 
   return [new SystemMessage(systemPrompt), new HumanMessage(userPrompt)];
 }
+
+export function buildTranslationAnalysisMessages(input: {
+  sourceText: string;
+  translation: string;
+  direction?: Direction;
+  source?: string;
+  target?: string;
+  lineCount: number;
+  uiLang: UILang;
+}) {
+  const config = input.direction ? getDirectionConfig(input.direction) : undefined;
+  const sourceName = input.source ?? config?.source ?? "French";
+  const targetName = input.target ?? config?.target ?? "Japanese";
+  const explanationLanguage = getExplanationLanguage(input.uiLang);
+  const isMultiLine = input.lineCount > 1;
+  const uiLanguageName = input.uiLang === "fr" ? "French" : "Japanese";
+
+  const systemPrompt = [
+    "You are a bilingual translation analysis assistant for French and Japanese learners.",
+    `The translation from ${sourceName} to ${targetName} is already provided.`,
+    "DO NOT re-translate and DO NOT change the translation.",
+    isMultiLine
+      ? `The source/translation contain ${input.lineCount} lines. Keep line order; grammar.line is 0-based.`
+      : "The source/translation contain one line.",
+    "Return ONLY a valid JSON object (no markdown, no commentary, no code fences).",
+    `Interface POV language: ${uiLanguageName}.`,
+    "Use this exact top-level shape: translation, explanation, hints, annotations, grammar.",
+    "Rules:",
+    "- translation: MUST be exactly the provided translation string.",
+    `- explanation: short explanation in ${explanationLanguage}.`,
+    `- hints: 2 to 4 short hints in ${explanationLanguage}.`,
+    "- annotations: OPTIONAL. If you are not confident, return an empty array.",
+    "- if annotations is provided for multi-line, it must be one array per line; otherwise return [].",
+    "- grammar: 1 to 3 points when possible (else []), each with name, explanation, line (0-based), optional token_span and example.",
+    `- Write grammar explanations/examples in ${explanationLanguage}.`,
+    "- Do not invent facts; keep it learner-focused.",
+  ].join("\n");
+
+  const directionLine = input.direction
+    ? `Direction: ${input.direction}`
+    : `Direction: ${sourceName} -> ${targetName}`;
+
+  const userPrompt = [
+    directionLine,
+    `Input lines: ${input.lineCount}`,
+    `Source language: ${sourceName}`,
+    `Target language: ${targetName}`,
+    "Source text:",
+    input.sourceText,
+    "Provided translation (MUST copy exactly into JSON.translation):",
+    input.translation,
+  ].join("\n\n");
+
+  return [new SystemMessage(systemPrompt), new HumanMessage(userPrompt)];
+}
