@@ -20,6 +20,20 @@ function getExplanationLanguage(uiLang: UILang) {
   return uiLang === "fr" ? "French" : "Japanese";
 }
 
+type AnalysisLang = UILang | "en";
+
+function getAnalysisLanguageName(lang: AnalysisLang) {
+  if (lang === "fr") {
+    return "French";
+  }
+
+  if (lang === "ja") {
+    return "Japanese";
+  }
+
+  return "English";
+}
+
 export function buildTranslationMessages(input: {
   text: string;
   direction?: Direction;
@@ -89,13 +103,15 @@ export function buildTranslationAnalysisMessages(input: {
   target?: string;
   lineCount: number;
   uiLang: UILang;
+  analysisLang?: AnalysisLang;
 }) {
   const config = input.direction ? getDirectionConfig(input.direction) : undefined;
   const sourceName = input.source ?? config?.source ?? "French";
   const targetName = input.target ?? config?.target ?? "Japanese";
-  const explanationLanguage = getExplanationLanguage(input.uiLang);
+  const analysisLang = input.analysisLang ?? input.uiLang;
+  const explanationLanguage = analysisLang === "en" ? "English" : getExplanationLanguage(analysisLang);
   const isMultiLine = input.lineCount > 1;
-  const uiLanguageName = input.uiLang === "fr" ? "French" : "Japanese";
+  const uiLanguageName = getAnalysisLanguageName(analysisLang);
 
   const systemPrompt = [
     "You are a bilingual translation analysis assistant for French and Japanese learners.",
@@ -115,6 +131,7 @@ export function buildTranslationAnalysisMessages(input: {
     "- if annotations is provided for multi-line, it must be one array per line; otherwise return [].",
     "- grammar: 1 to 3 points when possible (else []), each with name, explanation, line (0-based), optional token_span and example.",
     `- Write grammar explanations/examples in ${explanationLanguage}.`,
+    analysisLang === "en" ? "- Write grammar point names (grammar[].name) in English." : "",
     "- Do not invent facts; keep it learner-focused.",
   ].join("\n");
 

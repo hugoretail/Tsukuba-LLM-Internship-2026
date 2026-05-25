@@ -178,6 +178,44 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Pivot-enhancement: regenerate explanations/grammar in English (more stable),
+    // then translate those explanation fields into the selected UI language.
+    // Translation text itself stays in the target language.
+    if (usePivotEnglish) {
+      const sourceForEnglishAnalysis = pivotEnglish
+        ? [
+            "Source text (original):",
+            normalizedText,
+            "",
+            "English pivot (for reference):",
+            pivotEnglish,
+          ].join("\n")
+        : normalizedText;
+
+      const englishAnalysisMessages = buildTranslationAnalysisMessages({
+        sourceText: sourceForEnglishAnalysis,
+        translation: translationResult.output.translation,
+        direction,
+        lineCount,
+        uiLang,
+        analysisLang: "en",
+      });
+
+      const englishAnalysis = await invokeTranslationModel(englishAnalysisMessages, uiLang);
+      if (englishAnalysis.ok) {
+        const normalized = normalizeOutputForLineCount(
+          {
+            ...englishAnalysis.output,
+            translation: translationResult.output.translation,
+          },
+          lineCount
+        );
+
+        const localized = await forceExplanationFieldsToUiLanguage(normalized, uiLang);
+        translationResult = { ok: true, output: localized };
+      }
+    }
+
     // If the model returned no grammar points, try generating 1-3 learner-facing points.
     if (translationResult.output.grammar.length === 0) {
       const augmented = await augmentGrammarIfMissing({
@@ -195,6 +233,25 @@ export async function POST(req: NextRequest) {
     if (shouldForceExplanationToUiLanguage(translationResult.output, uiLang)) {
       const forced = await forceExplanationFieldsToUiLanguage(translationResult.output, uiLang);
       translationResult = { ok: true, output: forced };
+    }
+
+    // Hard guarantee: grammar point labels/explanations must never remain in English.
+    // Some models keep short labels like "Polite greeting" unchanged; handle them explicitly.
+    {
+      const localized = await localizeGrammarToUiLanguage(translationResult.output, uiLang);
+      translationResult = { ok: true, output: localized };
+    }
+
+    // Keep grammar points minimal and stable: drop examples entirely.
+    {
+      const stripped = stripGrammarExamples(translationResult.output);
+      translationResult = { ok: true, output: stripped };
+    }
+
+    // Final cleanup: remove punctuation-only grammar points and strip any leaked prompt boilerplate.
+    {
+      const cleaned = sanitizeOutputForUi(translationResult.output, uiLang);
+      translationResult = { ok: true, output: cleaned };
     }
 
     return NextResponse.json(
@@ -563,11 +620,20 @@ function normalizeGrammarPoint(value: unknown) {
   const raw = value as Record<string, unknown>;
   const name = pickFirstString(raw.name, raw.content, raw.title);
   const explanation = pickFirstString(raw.explanation, raw.content);
-  const example = pickFirstString(raw.example, raw.examples);
+  // We intentionally do NOT surface grammar examples; keep the UI minimal and stable.
   const tokenSpan = normalizeTokenSpan(raw.token_span);
   const line = typeof raw.line === "number" ? raw.line : 0;
 
   if (!name || !explanation) {
+    return null;
+  }
+
+  if (isTrivialGrammarName(name)) {
+    return null;
+  }
+
+  // Never surface leaked internal instructions as "grammar".
+  if (isPromptLeakText(name) || isPromptLeakText(explanation)) {
     return null;
   }
 
@@ -576,8 +642,163 @@ function normalizeGrammarPoint(value: unknown) {
     explanation,
     line,
     token_span: tokenSpan,
-    example,
+    example: undefined,
   };
+}
+
+function isTrivialGrammarName(name: string) {
+  const trimmed = name.trim();
+  if (!trimmed) {
+    return true;
+  }
+
+  // Punctuation-only or obvious labels we don't want as "grammar points".
+  if (/^[\p{P}\p{S}]+$/u.test(trimmed)) {
+    return true;
+  }
+
+  // Common punctuation labels in EN/JA.
+  if (/^(\?|？|!|！|\.|。|,|、|;|；|:|：|…|\.\.\.)$/u.test(trimmed)) {
+    return true;
+  }
+
+  if (/^(ピリオド|クエスチョン|クエスチョンマーク|エクスクラメーション|コンマ)$/u.test(trimmed)) {
+    return true;
+  }
+
+  if (/^(period|question( mark)?|exclamation( mark)?|comma|punctuation)$/i.test(trimmed)) {
+    return true;
+  }
+
+  // French punctuation labels.
+  if (/^(signe\s*[?!\.！؟]|point\s+d['’]interrogation|point\s+d['’]exclamation|virgule|ponctuation)$/i.test(trimmed)) {
+    return true;
+  }
+
+  return false;
+}
+
+function sanitizeOutputForUi(output: TranslateOutput, uiLang: UILang): TranslateOutput {
+  const draft = structuredClone(output);
+
+  draft.explanation = sanitizeLearnerText(draft.explanation, uiLang);
+  draft.hints = draft.hints
+    .map((h) => sanitizeLearnerText(h, uiLang))
+    .filter((h) => h.length > 0);
+
+  draft.grammar = draft.grammar
+    .map((g) => {
+      const next = { ...g };
+      next.name = sanitizeLearnerText(next.name, uiLang);
+      next.explanation = sanitizeLearnerText(next.explanation, uiLang);
+      next.example = undefined;
+
+      return next;
+    })
+    .filter((g) => g.name.trim().length > 0 && g.explanation.trim().length > 0)
+    .filter((g) => !isTrivialGrammarName(g.name))
+    .filter((g) => !isPromptLeakText(g.name) && !isPromptLeakText(g.explanation));
+
+  const validated = translateLlmOutputSchema.safeParse(draft);
+  return validated.success ? validated.data : output;
+}
+
+function stripGrammarExamples(output: TranslateOutput): TranslateOutput {
+  if (output.grammar.length === 0) {
+    return output;
+  }
+
+  const draft = structuredClone(output);
+  for (let i = 0; i < draft.grammar.length; i += 1) {
+    draft.grammar[i].example = undefined;
+  }
+
+  const validated = translateLlmOutputSchema.safeParse(draft);
+  return validated.success ? validated.data : output;
+}
+
+function sanitizeLearnerText(text: string, uiLang: UILang): string {
+  let t = (text ?? "").trim();
+  if (!t) {
+    return "";
+  }
+
+  // Remove leading language tags like "日本語:" / "French:".
+  t = t.replace(/^(?:日本語|英語|フランス語|French|English|Japanese)\s*[:：]\s*/iu, "");
+
+  // Drop common leaked instruction/prompt lines (EN + FR + JA).
+  const lines = t
+    .split(/\r?\n+/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+    .filter((line) => {
+      if (isPromptLeakText(line)) {
+        return false;
+      }
+
+      if (/^(CRITICAL|STRICT|VERY STRICT)\b/i.test(line)) {
+        return false;
+      }
+      if (/\b(Return ONLY|No JSON|Preserve line breaks|The source contains|Source text)\b/i.test(line)) {
+        return false;
+      }
+      if (/(行を結合|分割しない|行を結合または分割|原文は\d+行|出力は\d+行|JSON|コードフェンス|コメント|ソーステキスト|入力(テキスト)?\s*[:：])/.test(line)) {
+        return false;
+      }
+
+      return true;
+    });
+
+  // De-duplicate identical lines (models sometimes repeat).
+  const seen = new Set<string>();
+  const deduped: string[] = [];
+  for (const line of lines) {
+    const key = line.replace(/\s+/g, " ");
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    deduped.push(line);
+  }
+
+  t = deduped.join("\n").trim();
+  if (!t) {
+    return "";
+  }
+
+  // Final tiny cleanup.
+  t = t.replace(/\s{2,}/g, " ").trim();
+
+  // If Japanese UI and content is still Han-only (Chinese-like), drop it so we don't show Chinese.
+  if (uiLang === "ja" && looksLikeChineseForJapaneseUi(t)) {
+    return "";
+  }
+
+  return t;
+}
+
+function isPromptLeakText(text: string) {
+  const t = text.trim();
+  if (!t) {
+    return false;
+  }
+
+  // English prompt/instruction patterns.
+  if (/\b(preserve line breaks?|do not merge|do not split|return only|no json|no commentary|code fences?|source text|input (?:text|json)|output must|the source contains)\b/i.test(t)) {
+    return true;
+  }
+
+  // French prompt/instruction patterns (matches the screenshot leak).
+  if (/(restez\s+sur\s+la\s+ligne|ne\s+fusionnez|ne\s+divisez\s+pas\s+les\s+lignes|sauts?\s+de\s+ligne|le\s+texte\s+source\s+contient|le\s+r[ée]sultat\s+doit\s+[ée]tre|retournez\s+uniquement|pas\s+de\s+json|aucun\s+json|pas\s+de\s+commentaire|sans\s+commentaire|texte\s+source\s*[:：]|entr[ée]e\s*[:：]|sortie\s*[:：])/.test(t.toLowerCase())) {
+    return true;
+  }
+
+  // Japanese prompt/instruction patterns.
+  if (/(行を結合|分割しない|行を結合または分割|原文は\d+行|出力は\d+行|返(して|す)\s*ください|JSON|コードフェンス|コメント|ソーステキスト|入力(テキスト)?\s*[:：]|出力\s*[:：])/.test(t)) {
+    return true;
+  }
+
+  return false;
 }
 
 function normalizeTokenSpan(value: unknown): [number, number] | undefined {
@@ -606,7 +827,7 @@ async function ensureOutputLanguage(
     "Rewrite ONLY the explanation-related fields of the following translation output so that they are fully in the selected UI language.",
     `Selected UI language: ${uiLang === "fr" ? "French" : "Japanese"}.`,
     "Keep translation, annotations and grammar structure unchanged except for language of explanation fields.",
-    "Fields to rewrite: explanation, hints, grammar[].explanation, grammar[].example, annotations[].[].notes, annotations[].[].equivalents.",
+    "Fields to rewrite: explanation, hints, grammar[].explanation, annotations[].[].notes, annotations[].[].equivalents.",
     "Return ONLY valid JSON using the same shape as the input object.",
     "Input JSON:",
     JSON.stringify(output),
@@ -692,15 +913,6 @@ function collectRewriteTargets(output: TranslateOutput, uiLang: UILang): Rewrite
         },
       });
     }
-
-    if (point.example && isWrongScript(point.example, uiLang)) {
-      targets.push({
-        text: point.example,
-        apply: (draft, translated) => {
-          draft.grammar[pointIndex].example = translated;
-        },
-      });
-    }
   });
 
   output.annotations.forEach((line, lineIndex) => {
@@ -743,15 +955,82 @@ async function translateItemsToUiLanguage(items: string[], uiLang: UILang): Prom
     method: "jsonSchema",
   });
 
-  try {
-    const response = await translator.invoke([
-      `Translate every item into ${targetLanguage}.`,
-      "Keep the same order and keep each item concise.",
-      "Return ONLY valid JSON with key items.",
-      `Input items JSON: ${JSON.stringify(items)}`,
-    ].join("\n"));
+  const baseLines = [
+    `Translate every item into ${targetLanguage}.`,
+    "Keep the same order and keep each item concise.",
+    "Return ONLY valid JSON with key items.",
+    `Input items JSON: ${JSON.stringify(items)}`,
+  ];
 
+  const strictLine = uiLang === "ja"
+    ? "STRICT: Output MUST be Japanese (日本語). Do NOT output Chinese (中文). Do NOT use any Latin letters. Write in natural Japanese (kana/kanji)."
+    : "STRICT: Write in natural French only. Do NOT output English, Japanese, or Chinese. Translate short labels too.";
+
+  const stricterLine = uiLang === "ja"
+    ? "VERY STRICT: Output MUST be Japanese (日本語) only, with 0 Latin letters. Never keep English labels. Avoid Han-only sentences; use kana where appropriate."
+    : "VERY STRICT: Translate EVERYTHING into French only. Never keep English words. Do NOT output Japanese or Chinese characters.";
+
+  async function tryInvoke(extraLine: string) {
+    const response = await translator.invoke([
+      ...baseLines.slice(0, 2),
+      extraLine,
+      ...baseLines.slice(2),
+    ].join("\n"));
     return response.items;
+  }
+
+  function isOkOutput(outputItems: string[]) {
+    if (outputItems.length !== items.length) {
+      return false;
+    }
+
+    for (let index = 0; index < outputItems.length; index += 1) {
+      const candidate = outputItems[index]?.trim() ?? "";
+      if (!candidate) {
+        return false;
+      }
+
+      if (uiLang === "ja") {
+        if (/[A-Za-zÀ-ÖØ-öø-ÿ]/u.test(candidate)) {
+          return false;
+        }
+
+        // Reject Chinese (Han-only) for longer learner-facing strings.
+        if (looksLikeChineseForJapaneseUi(candidate)) {
+          return false;
+        }
+      } else {
+        // French must not contain CJK characters.
+        if (/[\u3040-\u30ff\u4e00-\u9faf]/u.test(candidate)) {
+          return false;
+        }
+
+        // French must contain some Latin letters (avoid empty/garbled outputs).
+        if (!/[A-Za-zÀ-ÖØ-öø-ÿ]/u.test(candidate)) {
+          return false;
+        }
+
+        if (containsLikelyEnglish(candidate)) {
+          return false;
+        }
+      }
+    }
+
+    return true;
+  }
+
+  try {
+    const firstAttempt = await tryInvoke(strictLine);
+    if (isOkOutput(firstAttempt)) {
+      return firstAttempt;
+    }
+
+    const secondAttempt = await tryInvoke(stricterLine);
+    if (isOkOutput(secondAttempt)) {
+      return secondAttempt;
+    }
+
+    return null;
   } catch {
     return null;
   }
@@ -827,15 +1106,6 @@ function collectAllExplanationTargets(output: TranslateOutput): RewriteTarget[] 
         },
       });
     }
-
-    if (point.example && point.example.trim().length > 0) {
-      targets.push({
-        text: point.example,
-        apply: (draft, translated) => {
-          draft.grammar[pointIndex].example = translated;
-        },
-      });
-    }
   });
 
   output.annotations.forEach((line, lineIndex) => {
@@ -893,7 +1163,8 @@ async function augmentGrammarIfMissing(input: {
   try {
     const response = await grammarModel.invoke([
       "Extract 1 to 3 learner-facing grammar points that are notable in this translation.",
-      `Write explanations and examples in ${explanationLanguage}.`,
+      `Write explanations in ${explanationLanguage}.`,
+      "Do NOT include an example field.",
       "Return ONLY valid JSON with key grammar.",
       "Each grammar item must include: name, explanation, line (0-based). token_span and example are optional.",
       "Do not invent facts; keep it concise.",
@@ -910,12 +1181,134 @@ async function augmentGrammarIfMissing(input: {
   }
 }
 
+function grammarNeedsUiLocalization(output: TranslateOutput, uiLang: UILang) {
+  if (output.grammar.length === 0) {
+    return false;
+  }
+
+  const corpus = output.grammar
+    .map((g) => [g.name, g.explanation].join(" "))
+    .join("\n");
+
+  if (uiLang === "ja") {
+    if (/[A-Za-zÀ-ÖØ-öø-ÿ]/u.test(corpus)) {
+      return true;
+    }
+
+    return looksLikeChineseForJapaneseUi(corpus);
+  }
+
+  return containsLikelyEnglish(corpus);
+}
+
+async function localizeGrammarToUiLanguage(output: TranslateOutput, uiLang: UILang): Promise<TranslateOutput> {
+  if (!grammarNeedsUiLocalization(output, uiLang)) {
+    return output;
+  }
+
+  const targetLanguage = uiLang === "fr" ? "French" : "Japanese";
+  const translator = ollamaChat.withStructuredOutput(grammarOnlySchema, {
+    name: "LocalizedGrammar",
+    method: "jsonSchema",
+  });
+
+  const inputGrammar = output.grammar;
+
+  try {
+    const response = await translator.invoke([
+      `Translate the following grammar points into ${targetLanguage}.`,
+      "Translate ONLY: name, explanation.",
+      "Do NOT include an example field.",
+      "Keep line and token_span values the same as the input.",
+      "Return ONLY valid JSON with key grammar.",
+      uiLang === "ja"
+        ? "STRICT: Output MUST be Japanese (日本語), NOT Chinese (中文). Do NOT use any Latin letters. Use natural Japanese."
+        : "STRICT: Output must be French only. Do NOT output English, Japanese, or Chinese characters.",
+      `Input grammar JSON: ${JSON.stringify(inputGrammar)}`,
+    ].join("\n\n"));
+
+    if (!Array.isArray(response.grammar) || response.grammar.length !== inputGrammar.length) {
+      return output;
+    }
+
+    const draft = structuredClone(output);
+    draft.grammar = response.grammar.map((point, index) => ({
+      ...point,
+      line: inputGrammar[index].line,
+      token_span: inputGrammar[index].token_span,
+      example: undefined,
+    }));
+
+    if (grammarNeedsUiLocalization(draft, uiLang)) {
+      // Still not localized - fall back below.
+      throw new Error("grammar localization still contains wrong language");
+    }
+
+    const validated = translateLlmOutputSchema.safeParse(draft);
+    return validated.success ? validated.data : output;
+  } catch {
+    // Fallback: translate each grammar field with strict plain-text translation.
+    const draft = structuredClone(output);
+    const targetName = uiLang === "fr" ? "French" : "Japanese";
+
+    for (let i = 0; i < draft.grammar.length; i += 1) {
+      const point = draft.grammar[i];
+      const translatedName = await translatePlainAutoSource({
+        sourceText: point.name,
+        targetName,
+        expectedLineCount: 1,
+      });
+      if (translatedName && translatedName.trim()) {
+        draft.grammar[i].name = translatedName.trim();
+      }
+
+      const translatedExplanation = await translatePlainAutoSource({
+        sourceText: point.explanation,
+        targetName,
+        expectedLineCount: 1,
+      });
+      if (translatedExplanation && translatedExplanation.trim()) {
+        draft.grammar[i].explanation = translatedExplanation.trim();
+      }
+
+      draft.grammar[i].example = undefined;
+    }
+
+    const validated = translateLlmOutputSchema.safeParse(draft);
+    return validated.success ? validated.data : output;
+  }
+}
+
 function isWrongScript(text: string, uiLang: UILang) {
   if (uiLang === "fr") {
     return /[\u3040-\u30ff\u4e00-\u9faf]/u.test(text);
   }
 
-  return /[A-Za-z]/u.test(text);
+  // uiLang === 'ja'
+  if (/[A-Za-zÀ-ÖØ-öø-ÿ]/u.test(text)) {
+    return true;
+  }
+
+  return looksLikeChineseForJapaneseUi(text);
+}
+
+function containsKana(text: string) {
+  return /[\u3040-\u309f\u30a0-\u30ff]/u.test(text);
+}
+
+function looksLikeChineseForJapaneseUi(text: string) {
+  const trimmed = text.trim();
+  if (trimmed.length < 10) {
+    return false;
+  }
+
+  const hasHan = /[\u4e00-\u9fff]/u.test(trimmed);
+  if (!hasHan) {
+    return false;
+  }
+
+  // Heuristic: Japanese learner-facing sentences almost always contain kana (particles, okurigana).
+  return !containsKana(trimmed);
 }
 
 function containsWrongScript(
@@ -925,7 +1318,8 @@ function containsWrongScript(
   const text = [
     output.explanation,
     ...output.hints,
-    ...output.grammar.map((point) => [point.explanation, point.example ?? ""].join(" ")),
+    // NOTE: grammar.example is excluded; it must be in the TARGET translation language.
+    ...output.grammar.map((point) => point.explanation),
     ...output.annotations.flatMap((line) => line.map((token) => [token.notes ?? "", ...token.equivalents].join(" "))),
   ].join("\n");
 
@@ -1112,7 +1506,7 @@ function getExplanationCorpus(output: TranslateOutput): string {
   return [
     output.explanation,
     ...output.hints,
-    ...output.grammar.flatMap((g) => [g.name, g.explanation, g.example ?? ""]),
+    ...output.grammar.flatMap((g) => [g.name, g.explanation]),
     ...output.annotations.flatMap((line) =>
       line.flatMap((token) => [token.notes ?? "", ...token.equivalents])
     ),
@@ -1127,7 +1521,11 @@ function shouldForceExplanationToUiLanguage(output: TranslateOutput, uiLang: UIL
 
   if (uiLang === "ja") {
     // If UI language is Japanese, any noticeable Latin script suggests English/French leaked in.
-    return /[A-Za-zÀ-ÖØ-öø-ÿ]/u.test(corpus);
+    if (/[A-Za-zÀ-ÖØ-öø-ÿ]/u.test(corpus)) {
+      return true;
+    }
+
+    return looksLikeChineseForJapaneseUi(corpus);
   }
 
   // uiLang === 'fr'
@@ -1136,8 +1534,21 @@ function shouldForceExplanationToUiLanguage(output: TranslateOutput, uiLang: UIL
     return true;
   }
 
-  // Simple English heuristic: common function words.
-  return /\b(the|and|to|of|is|are|was|were|in|for|with|this|that|you|your|we|they)\b/i.test(corpus);
+  return containsLikelyEnglish(corpus);
+}
+
+function containsLikelyEnglish(text: string) {
+  // Common function words (sentences)
+  if (/\b(the|and|to|of|is|are|was|were|in|for|with|this|that|you|your|we|they|as|from|into|can|cannot|must)\b/i.test(text)) {
+    return true;
+  }
+
+  // Common short UI/grammar labels that should never appear in French/Japanese POV.
+  if (/\b(politeness|polite|casual|formal|greeting|particle|kanji|hiragana|katakana|verb|noun|adjective|present|past|negative|question|conjugation|counter)\b/i.test(text)) {
+    return true;
+  }
+
+  return false;
 }
 
 function getTargetName(direction: "fr-ja" | "ja-fr") {
@@ -1220,6 +1631,35 @@ async function translatePlain(input: {
     `Return ONLY the plain translated text in ${input.targetName}.`,
     "No JSON, no commentary, no code fences.",
     `If you include any text in a different language than ${input.targetName}, you failed.`,
+    "Source text:",
+    input.sourceText,
+  ].join("\n\n");
+
+  try {
+    const response = await ollamaChatText.invoke(prompt);
+    const raw = typeof response.content === "string" ? response.content.trim() : JSON.stringify(response.content);
+    return sanitizeTranslationText(stripCodeFence(raw));
+  } catch {
+    return null;
+  }
+}
+
+async function translatePlainAutoSource(input: {
+  sourceText: string;
+  targetName: string;
+  expectedLineCount: number;
+}) {
+  const prompt = [
+    `Translate the following text into ${input.targetName}.`,
+    "Preserve line breaks exactly and do not merge or split lines.",
+    input.expectedLineCount > 1
+      ? `The source contains ${input.expectedLineCount} lines; output must contain exactly ${input.expectedLineCount} lines.`
+      : "The source contains one line; output must be one line.",
+    `Return ONLY the plain translated text in ${input.targetName}.`,
+    "No JSON, no commentary, no code fences.",
+    input.targetName === "Japanese"
+      ? "CRITICAL: Output MUST be Japanese (日本語), NOT Chinese (中文). Do NOT use any Latin letters. Prefer using kana where appropriate."
+      : "CRITICAL: Output MUST be French only. Do NOT output English, Japanese, or Chinese characters.",
     "Source text:",
     input.sourceText,
   ].join("\n\n");
