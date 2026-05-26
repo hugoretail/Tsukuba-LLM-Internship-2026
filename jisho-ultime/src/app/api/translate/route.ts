@@ -1,4 +1,4 @@
-import { ollamaChat, ollamaChatText, ollamaModelName } from "@/lib/llm/ollama";
+import { ollamaChat, ollamaChatText } from "@/lib/llm/ollama";
 import {
   buildTranslationAnalysisMessages,
   buildTranslationMessages,
@@ -48,7 +48,6 @@ const grammarOnlySchema = z.object({
           z.number().int().nonnegative(),
         ])
         .optional(),
-      example: z.string().trim().min(1).optional(),
     })
   ),
 });
@@ -242,12 +241,6 @@ export async function POST(req: NextRequest) {
       translationResult = { ok: true, output: localized };
     }
 
-    // Keep grammar points minimal and stable: drop examples entirely.
-    {
-      const stripped = stripGrammarExamples(translationResult.output);
-      translationResult = { ok: true, output: stripped };
-    }
-
     // Final cleanup: remove punctuation-only grammar points and strip any leaked prompt boilerplate.
     {
       const cleaned = sanitizeOutputForUi(translationResult.output, uiLang);
@@ -256,10 +249,8 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json(
       {
-        input: { text, direction },
         output: translationResult.output,
         meta: {
-          model: ollamaModelName,
           latencyMs: Date.now() - startedAt,
         },
       },
@@ -597,8 +588,6 @@ function normalizeAnnotationToken(value: unknown) {
     lemma: pickFirstString(raw.lemma),
     pos: pickFirstString(raw.pos),
     notes: pickFirstString(raw.notes),
-    start: typeof raw.start === "number" ? raw.start : undefined,
-    end: typeof raw.end === "number" ? raw.end : undefined,
   };
 }
 
@@ -620,7 +609,6 @@ function normalizeGrammarPoint(value: unknown) {
   const raw = value as Record<string, unknown>;
   const name = pickFirstString(raw.name, raw.content, raw.title);
   const explanation = pickFirstString(raw.explanation, raw.content);
-  // We intentionally do NOT surface grammar examples; keep the UI minimal and stable.
   const tokenSpan = normalizeTokenSpan(raw.token_span);
   const line = typeof raw.line === "number" ? raw.line : 0;
 
@@ -642,7 +630,6 @@ function normalizeGrammarPoint(value: unknown) {
     explanation,
     line,
     token_span: tokenSpan,
-    example: undefined,
   };
 }
 
@@ -691,27 +678,12 @@ function sanitizeOutputForUi(output: TranslateOutput, uiLang: UILang): Translate
       const next = { ...g };
       next.name = sanitizeLearnerText(next.name, uiLang);
       next.explanation = sanitizeLearnerText(next.explanation, uiLang);
-      next.example = undefined;
 
       return next;
     })
     .filter((g) => g.name.trim().length > 0 && g.explanation.trim().length > 0)
     .filter((g) => !isTrivialGrammarName(g.name))
     .filter((g) => !isPromptLeakText(g.name) && !isPromptLeakText(g.explanation));
-
-  const validated = translateLlmOutputSchema.safeParse(draft);
-  return validated.success ? validated.data : output;
-}
-
-function stripGrammarExamples(output: TranslateOutput): TranslateOutput {
-  if (output.grammar.length === 0) {
-    return output;
-  }
-
-  const draft = structuredClone(output);
-  for (let i = 0; i < draft.grammar.length; i += 1) {
-    draft.grammar[i].example = undefined;
-  }
 
   const validated = translateLlmOutputSchema.safeParse(draft);
   return validated.success ? validated.data : output;
@@ -1164,9 +1136,8 @@ async function augmentGrammarIfMissing(input: {
     const response = await grammarModel.invoke([
       "Extract 1 to 3 learner-facing grammar points that are notable in this translation.",
       `Write explanations in ${explanationLanguage}.`,
-      "Do NOT include an example field.",
       "Return ONLY valid JSON with key grammar.",
-      "Each grammar item must include: name, explanation, line (0-based). token_span and example are optional.",
+      "Each grammar item must include: name, explanation, line (0-based). token_span is optional.",
       "Do not invent facts; keep it concise.",
       sourceForContext,
       `Translation (${targetName}):\n${input.output.translation}`,
@@ -1218,7 +1189,6 @@ async function localizeGrammarToUiLanguage(output: TranslateOutput, uiLang: UILa
     const response = await translator.invoke([
       `Translate the following grammar points into ${targetLanguage}.`,
       "Translate ONLY: name, explanation.",
-      "Do NOT include an example field.",
       "Keep line and token_span values the same as the input.",
       "Return ONLY valid JSON with key grammar.",
       uiLang === "ja"
@@ -1236,7 +1206,6 @@ async function localizeGrammarToUiLanguage(output: TranslateOutput, uiLang: UILa
       ...point,
       line: inputGrammar[index].line,
       token_span: inputGrammar[index].token_span,
-      example: undefined,
     }));
 
     if (grammarNeedsUiLocalization(draft, uiLang)) {
@@ -1270,8 +1239,6 @@ async function localizeGrammarToUiLanguage(output: TranslateOutput, uiLang: UILa
       if (translatedExplanation && translatedExplanation.trim()) {
         draft.grammar[i].explanation = translatedExplanation.trim();
       }
-
-      draft.grammar[i].example = undefined;
     }
 
     const validated = translateLlmOutputSchema.safeParse(draft);
@@ -1318,7 +1285,6 @@ function containsWrongScript(
   const text = [
     output.explanation,
     ...output.hints,
-    // NOTE: grammar.example is excluded; it must be in the TARGET translation language.
     ...output.grammar.map((point) => point.explanation),
     ...output.annotations.flatMap((line) => line.map((token) => [token.notes ?? "", ...token.equivalents].join(" "))),
   ].join("\n");
@@ -1330,7 +1296,7 @@ async function requestJsonRepair(rawContent: string): Promise<string | null> {
   const repairPrompt = [
     "Rewrite the following output into STRICT valid JSON.",
     "Return ONLY JSON with exactly these keys:",
-    '{"translation":"string","explanation":"string","hints":["string","string"],"annotations":[[{"display":"string","surface":"string","gloss":"string","equivalents":["string"],"lemma":"string?","pos":"string?","notes":"string?","start":0,"end":1}]],"grammar":[{"name":"string","explanation":"string","line":0,"token_span":[0,1],"example":"string?"}]}',
+    '{"translation":"string","explanation":"string","hints":["string","string"],"annotations":[[{"display":"string","surface":"string","gloss":"string","equivalents":["string"],"lemma":"string?","pos":"string?","notes":"string?"}]],"grammar":[{"name":"string","explanation":"string","line":0,"token_span":[0,1]}]}',
     "Rules:",
     "- Keep meaning unchanged.",
     "- hints must contain between 2 and 4 strings.",

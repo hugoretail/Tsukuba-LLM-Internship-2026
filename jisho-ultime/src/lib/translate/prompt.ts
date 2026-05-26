@@ -67,7 +67,7 @@ export function buildTranslationMessages(input: {
     `- explanation: short explanation in ${explanationLanguage}.`,
     `- hints: 2 to 4 short bullet-like hints in ${explanationLanguage}.`,
     "- annotations: one array per translation line, ordered tokens/segments for that line.",
-    "- token fields: display, surface, gloss, equivalents are required; lemma/pos/notes/antonyms/start/end are optional.",
+    "- token fields: display, surface, gloss, equivalents are required; lemma/pos/notes/antonyms are optional.",
     "- display: exact token text from the translation line.",
     "- surface: source-language lexical unit.",
     `- gloss: direct translation in ${targetName}.`,
@@ -75,7 +75,7 @@ export function buildTranslationMessages(input: {
     "- antonyms: optional, up to 2 learner-useful items.",
     `- annotations[].notes must be in ${explanationLanguage}.`,
     "- if uncertain for a line, return an empty array for that line.",
-    `- grammar: short learner-facing list (1 to 3 points when possible), each point with line and optional token_span; explanations/examples in ${explanationLanguage}.`,
+    `- grammar: short learner-facing list (1 to 3 points when possible), each point with line and optional token_span; explanations in ${explanationLanguage}.`,
     "- only return an empty grammar array if there is truly nothing notable.",
   ].join("\n");
 
@@ -129,8 +129,8 @@ export function buildTranslationAnalysisMessages(input: {
     `- hints: 2 to 4 short hints in ${explanationLanguage}.`,
     "- annotations: OPTIONAL. If you are not confident, return an empty array.",
     "- if annotations is provided for multi-line, it must be one array per line; otherwise return [].",
-    "- grammar: 1 to 3 points when possible (else []), each with name, explanation, line (0-based), optional token_span and example.",
-    `- Write grammar explanations/examples in ${explanationLanguage}.`,
+    "- grammar: 1 to 3 points when possible (else []), each with name, explanation, line (0-based), optional token_span.",
+    `- Write grammar explanations in ${explanationLanguage}.`,
     analysisLang === "en" ? "- Write grammar point names (grammar[].name) in English." : "",
     "- Do not invent facts; keep it learner-focused.",
   ].join("\n");

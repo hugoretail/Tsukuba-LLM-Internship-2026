@@ -1,0 +1,6 @@
+{"id":"frja-001","direction":"fr-ja","source":"Bonjour, comment vas-tu ?","reference":"こんにちは、お元気ですか？","tags":["greeting"],"difficulty":"A1"}
+{"id":"frja-002","direction":"fr-ja","source":"Je suis etudiant a l'universite de Tsukuba.","reference":"私は筑波大学の学生です。","tags":["self-intro"],"difficulty":"A2"}
+{"id":"frja-003","direction":"fr-ja","source":"Il pleut beaucoup aujourd'hui, prends un parapluie.","reference":"今日は雨がたくさん降っているので、傘を持っていって。","tags":["weather"],"difficulty":"B1"}
+{"id":"jafr-001","direction":"ja-fr","source":"すみません、駅はどこですか？","reference":"Excusez-moi, ou se trouve la gare ?","tags":["travel"],"difficulty":"A1"}
+{"id":"jafr-002","direction":"ja-fr","source":"昨日は友達と映画を見に行きました。","reference":"Hier, je suis alle voir un film avec des amis.","tags":["past"],"difficulty":"A2"}
+{"id":"jafr-003","direction":"ja-fr","source":"この問題は少し難しいけど、頑張れば理解できます。","reference":"Ce probleme est un peu difficile, mais on peut le comprendre avec des efforts.","tags":["study"],"difficulty":"B2"}

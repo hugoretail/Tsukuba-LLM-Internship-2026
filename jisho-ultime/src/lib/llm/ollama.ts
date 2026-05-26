@@ -4,8 +4,6 @@ const rawBaseUrl = process.env.OLLAMA_BASE_URL?.trim() || "http://127.0.0.1:1143
 const baseUrl = rawBaseUrl.replace("localhost", "127.0.0.1");
 const model = process.env.OLLAMA_MODEL?.trim() || "qwen2.5:7b";
 
-export const ollamaModelName = model;
-
 export const ollamaChat = new ChatOllama({
   baseUrl,
   model,

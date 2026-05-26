@@ -12,8 +12,6 @@ const annotationTokenSchema = z.object({
   pos: z.string().trim().min(1).optional(),
   antonyms: z.array(z.string().trim().min(1)).optional(),
   notes: z.string().trim().min(1).optional(),
-  start: z.number().int().nonnegative().optional(),
-  end: z.number().int().nonnegative().optional(),
 });
 
 const grammarPointSchema = z.object({
@@ -26,7 +24,6 @@ const grammarPointSchema = z.object({
       z.number().int().nonnegative(),
     ])
     .optional(),
-  example: z.string().trim().min(1).optional(),
 });
 
 export const translateRequestSchema = z.object({
