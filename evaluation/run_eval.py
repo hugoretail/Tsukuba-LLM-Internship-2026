@@ -96,7 +96,7 @@ def main() -> int:
     parser.add_argument("--dataset", default="evaluation/data/llm_eval_v1.jsonl")
     parser.add_argument("--out", default="evaluation/output/results.csv")
     parser.add_argument("--model-label", default="qwen2.5-unknown")
-    parser.add_argument("--timeout", type=float, default=180.0)
+    parser.add_argument("--timeout", type=float, default=600.0)
     parser.add_argument("--connect-timeout", type=float, default=10.0)
     parser.add_argument("--retries", type=int, default=2)
     parser.add_argument("--retry-backoff", type=float, default=1.5)

@@ -15,7 +15,7 @@
 
 Build a French <-> Japanese learning assistant powered by a local/open-source LLM stack (Ollama), with LangChain/LangGraph orchestration.
 
-### MVP Scope (Phase 1)
+### Phase 1 Project Plan
 
 - Translation FR <-> JA specialized for learner use-cases
 - Guided output modes:
@@ -25,18 +25,14 @@ Build a French <-> Japanese learning assistant powered by a local/open-source LL
 - Basic grammar hints (particles, politeness level, tense/aspect markers)
 - Local-first inference with Ollama
 
-### Notes
-
-NONE
-
 ### Issues
 
-- Insuffisances du modèle : prompt pas assez développé
-- Hallucinations : prompts trop détaillés
-- Tâches difficiles : traductions FR<->JA alors que le modèle n'a pas été entrainé sur beaucoup de texte comme ça
-- Contexte trop gros : plusieurs tâches en un seul prompt. Séparer les tâches en plusieurs prompts (traduction puis explication)
+- Limitations of the model: prompt not detailed enough
+- Hallucinations: prompts too detailed
+- Difficult tasks: FR<->JA translations, even though the model hasn't been trained on much text like this
+- Context too broad: multiple tasks in a single prompt. Split the tasks into separate prompts (translation followed by explanation)
 
-### Backlog (Phase 2)
+### DLC [TODO]
 
 - Exercise generation (fill-in-the-blank, rephrase, translate-back)
   > TODO: ADD MORE EXERCISES (fun and tryharding ones)
@@ -54,6 +50,14 @@ NONE
 ## Project 2 - ???
 
 TODO
+
+## Presentation
+
+The final presentation of the internship will take place on:
+- 6/8 (Monday), 16:00 JST (09:00 in France).
+
+The slides used for the presentation are available here:
+- https://www.canva.com/design/DAHK1jVrpeY/7Z_UJuRa8uaeUGz54QYgYA/edit
 
 ## Slack link
 
