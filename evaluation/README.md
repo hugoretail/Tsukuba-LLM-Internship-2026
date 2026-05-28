@@ -83,11 +83,17 @@ python evaluation/run_eval.py --dataset evaluation/data/llm_eval_v1.jsonl --mode
 
 ## Visualize
 
+From root:
 ```
 python evaluation/visualize.py --inputs evaluation/output/results.csv evaluation/output/results-7b.csv
 ```
 
 This generates plots in `evaluation/output`.
+
+If you evaluated all models performance, here's the command to get the full visualization:
+```
+python evaluation\visualize.py --inputs evaluation\output\results-1p5b.csv evaluation\output\results-1p5b-pivot.csv evaluation\output\results-7b.csv evaluation\output\results-7b-pivot.csv
+```
 
 ## Outputs
 

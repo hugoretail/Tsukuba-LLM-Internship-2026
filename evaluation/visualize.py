@@ -37,15 +37,19 @@ def main() -> int:
         label_col = "model_label"
 
     metric_means = df.groupby(label_col)[["bleu", "chrf", "rouge_l"]].mean().reset_index()
+    metric_plot = metric_means.melt(id_vars=[label_col], var_name="metric", value_name="score")
+    metric_plot["display_score"] = metric_plot["score"]
+    metric_plot.loc[metric_plot["metric"] == "rouge_l", "display_score"] *= 100
 
     plt.figure(figsize=(8, 4))
     sns.barplot(
-        data=metric_means.melt(id_vars=[label_col], var_name="metric", value_name="score"),
+        data=metric_plot,
         x="metric",
-        y="score",
+        y="display_score",
         hue=label_col,
     )
     plt.title("Average Translation Metrics")
+    plt.ylabel("Score (ROUGE-L x100)")
     plt.tight_layout()
     plt.savefig(out_dir / "metrics_bar.png", dpi=200)
     plt.close()
