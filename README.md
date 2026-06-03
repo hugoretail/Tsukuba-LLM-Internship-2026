@@ -1,6 +1,6 @@
 # Tsukuba-LLM-Internship-2026
 
-## Reading Progress
+## LangChain Reading Progress
 
 - [x] Preface
 - [x] CHAPTER 1 - LLM Fundamentals with LangChain
@@ -20,7 +20,6 @@ Build a French <-> Japanese learning assistant powered by a local/open-source LL
 - Translation FR <-> JA specialized for learner use-cases
 - Guided output modes:
 	- Natural translation
-	- Literal translation
 	- Short explanation of lexical/grammar choices
 - Basic grammar hints (particles, politeness level, tense/aspect markers)
 - Local-first inference with Ollama
@@ -44,12 +43,7 @@ Build a French <-> Japanese learning assistant powered by a local/open-source LL
 
 ### Evaluation
 
-- [ ] https://zenn.dev/headwaters/articles/c0b91961749811
-- [ ] https://devneko.jp/wordpress/?p=306
-
-## Project 2 - ???
-
-TODO
+Metric references and tooling links are listed in the **Resources** section.
 
 ## Presentation
 
@@ -64,11 +58,37 @@ The slides used for the presentation are available here:
 Discussion: https://app.slack.com/client/T03TFRDR1/C0AQCHNQ746
 Schedule: https://app.slack.com/client/T03TFRDR1
 
-## Ressources
+## Resources
 
-Book in PDF: [Learning LangChain Building AI and LLM Applications with LangChain and LangGraph (Mayo Oshin, Nuno Campos)](https://ytx-readings.github.io/AI/books/LLM/LangChain/Learning%20LangChain%20Building%20AI%20and%20LLM%20Applications%20with%20LangChain%20and%20LangGraph%20(Mayo%20Oshin,%20Nuno%20Campos)%20(Z-Library).pdf)
+Last accessed on 3 June 2026.
 
-Google Books: https://books.google.co.jp/books?id=_3VGEQAAQBAJ&pg=PR5&hl=ja&source=gbs_selected_pages&cad=1#v=onepage&q&f=false
+### Reference book
+
+- Oshin, M.; Campos, N. *Learning LangChain: Building AI and LLM Applications with LangChain and LangGraph*. Google Books, [online]. Available: https://books.google.co.jp/books?id=_3VGEQAAQBAJ
+
+### Technical documentation
+
+- LangChain (JavaScript/TypeScript) documentation, [online]. Available: https://js.langchain.com/docs/
+- LangGraph documentation, [online]. Available: https://langchain-ai.github.io/langgraph/
+- Ollama documentation, [online]. Available: https://ollama.com/
+
+### Evaluation metrics (overviews)
+
+- Headwaters, “NLP evaluation metrics overview (BLEU / METEOR / ROUGE / etc.)”, Zenn, [online]. Available: https://zenn.dev/headwaters/articles/c0b91961749811
+- devneko, “BARTScore overview/notes”, [online]. Available: https://devneko.jp/wordpress/?p=306
+
+### Python libraries used in evaluation
+
+- Post, M. “sacreBLEU”, [software]. Available: https://github.com/mjpost/sacrebleu
+- seaborn documentation, [online]. Available: https://seaborn.pydata.org/
+
+### Fine-tuning references and toolkits
+
+- Hu, E. J. et al. “LoRA: Low-Rank Adaptation of Large Language Models”, arXiv:2106.09685, [online]. Available: https://arxiv.org/abs/2106.09685
+- Dettmers, T. et al. “QLoRA: Efficient Finetuning of Quantized LLMs”, arXiv:2305.14314, [online]. Available: https://arxiv.org/abs/2305.14314
+- Hugging Face PEFT (LoRA/adapters), [software]. Available: https://github.com/huggingface/peft
+- LLaMA-Factory, [software]. Available: https://github.com/hiyouga/LLaMA-Factory
+- Axolotl, [software]. Available: https://github.com/axolotl-ai-cloud/axolotl
 
 ---
 

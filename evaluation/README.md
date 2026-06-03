@@ -2,13 +2,14 @@
 
 This folder contains a lightweight evaluation pipeline for the FR <-> JA translation app.
 
-## Why these metrics
+## Why these metrics | TODO
 
 Based on the references you shared, the most practical metrics for this project are:
 
 - BLEU: standard MT baseline, cheap to compute, good for tracking regressions.
 - chrF: character-level F-score, much more robust for Japanese than word BLEU.
 - ROUGE-L: sequence overlap signal for structure/ordering.
+- METEOR: TODO
 
 The Zenn article gives a broad overview of common metrics (BLEU, METEOR, ROUGE-L, BERTScore, etc.).
 The devneko link is about BARTScore. It is powerful but requires a heavy seq2seq model and is harder to run offline.
@@ -30,6 +31,13 @@ JSONL in `evaluation/data/*.jsonl`:
 ```
 {"id":"frja-001","direction":"fr-ja","source":"...","reference":"...","tags":["..."],"difficulty":"A1","expected_keywords_fr":["..."],"expected_keywords_ja":["..."]}
 ```
+
+Source : My name is Hugo
+Reference : 私の名前はユーゴです
+expected_keywords_fr : -
+expected_keywords_ja : '私', '名前', 'ユーゴ', 'ヒューゴ', '申します。', '言います'
+
+Word-score based evaluation /// Meaning-score based evaluation (grammar (?))
 
 Add more items to improve coverage. Keyword lists are optional and used only for heuristic coverage.
 
